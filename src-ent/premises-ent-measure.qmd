@@ -324,8 +324,19 @@ family = gaussian)
 
 dat <- do.call(rbind, lapply(1:length(null_diffs), function(x) data_frame(sub = names(null_diffs[x]),
                                                          diffs = null_diffs[[x]])))
+dat$subject <- as.integer(gsub("P", "", dat$sub))
+## here is a simple model where I don't assume any hierarchical structure
 
-fit <- brm(diffs ~ 1,
-           data = dat,
-           family = gaussian)
+data <- list("y" = dat$diffs, 
+             "n" = length(dat$diffs),
+             "N" = length(unique(dat$sub)),
+             "subs" = dat$subject)
+
+##### set up the model
+model <- stan_model("/home/kgarner/Documents/projects/doors/src-ent/model-files/hierarchical_normal_simple.stan")
+fit <- sampling(model, data, iter=2000, chains=4)
+```
+
+```{r}
+traceplot(fit)
 ```

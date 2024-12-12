@@ -8,6 +8,7 @@
 
 // The input data is a vector 'y' of length n, which comes from 'N' subjects.
 data {
+  int<lower=0> n;
   vector[n] y; // entropy difference scores
 }
 
