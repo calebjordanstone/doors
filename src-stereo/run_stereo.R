@@ -24,9 +24,6 @@ fnl <- file.path(data_path, paste(paste(exp, "evt", sep = "_"), ".csv", sep = ""
 data <- read_csv(fnl, show_col_types = FALSE)
 data <- data %>% filter(ses == 2)
 
-# rm sub-62, who happened to have a very low rate of switches into context 1 during training sub-session 2
-data <- data %>% filter(sub!=62)
-
 # load shortest path data
 fnl <- file.path(data_path, paste(paste(exp, "opt-path", sep = "_"), ".csv", sep = ""))
 opt <- read_csv(fnl, show_col_types = FALSE)
@@ -37,7 +34,7 @@ graph <- unname(data.matrix(read_csv(fnl, col_names = FALSE, show_col_types = FA
 
 #--------------------------------------------------------------------------------------------------
 # extract stereotypy metrics
-stereo <- count_stereo(data, opt, graph)
+stereo <- count_stereo(exp, data, opt, graph)
 
 # save to file
 fnl <- file.path(project_path, "res", paste(paste(exp, "stereotypy", sep = "_"), ".csv", sep = ""))

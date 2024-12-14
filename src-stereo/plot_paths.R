@@ -31,11 +31,6 @@ sort_by <- 'entropy' #entropy or transition_counts
 title_sz <- 30
 label_sz <- 30
 
-
-# -------------------------------------------------------------------------
-# rm sub-62, who happened to have a very low rate of switches into context 1 during training sub-session 2
-subs <- data.frame(subs) %>% filter(subs!="sub-62") %>% pull(subs)
-
 #=========================================================================================================
 # read the optimal path data
 project_path <- getwd()

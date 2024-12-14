@@ -12,8 +12,9 @@ library(ggsci)
 project_path <- getwd()
 
 # settings
-exp <- "exp_lt" # experiment: 'exp_ts' (task-conding) or 'exp_lt' (learning transfer)
-ses <- "ses-test" # session: 'ses-learn','ses-train','ses-test'
+exp <- "exp_ts" # experiment: 'exp_ts' (task-switching) or 'exp_lt' (learning transfer)
+ses <- "ses-train" # session: 'ses-learn','ses-train','ses-test'
+title_sz = 40
 label_sz <- 20
 mk_sz <- 2
 
@@ -77,14 +78,16 @@ if (ses == "ses-learn") {
       x = "Context", y = "Accuracy (%)"
     ) +
     theme(
-      plot.title = element_text(size = label_sz), axis.text.x = element_text(size = label_sz),
-      axis.text.y = element_text(size = label_sz), legend.text = element_text(size = label_sz), axis.title.x = element_text(size = label_sz),
-      axis.title.y = element_text(size = label_sz), legend.title = element_text(size = label_sz)
+      plot.title = element_text(size = label_sz), 
+      axis.text.x = element_text(size = label_sz),
+      axis.text.y = element_text(size = label_sz), 
+      legend.text = element_text(size = label_sz), 
+      axis.title.x = element_text(size = label_sz), 
+      axis.title.y = element_text(size = label_sz), 
+      legend.title = element_text(size = label_sz)
     )
   
 } else {
-  
-  res <- res %>% filter(switch=="Stay")
   
   # for train and test phases, group by training type (low / high switch) and trial type (switch / stay)
   res %>% 
@@ -94,26 +97,30 @@ if (ses == "ses-learn") {
     #geom_hline(yintercept = 0.25, linetype = "solid", linewidth = 1, alpha = 1, color = "black") +
     
     # show each person's score by training type (low switch/high switch) and trial type (switch/stay)
-    geom_violin(aes(x = train_type, y = accuracy, color = transfer)) +
+    geom_violin(aes(x = train_type, y = context_changes, color = switch, fill = switch),
+                position = position_dodge(width = .7), alpha = .5, linewidth = .4) +
     
-    # add a 95% confidence interval
-    stat_summary(
-      aes(x = train_type, y = accuracy, color = transfer),
-      fun.data = "mean_cl_normal",geom = "pointrange", position = position_dodge(width = .9), linewidth = 1, size = mk_sz/2) +
+    # opt 1: add a boxplot
+    geom_boxplot(aes(x = train_type, y = context_changes, fill = switch),
+                 position = position_dodge(width = .7), width = .05, linewidth = .7,
+                 outlier.alpha = 1,outlier.shape = 21,outlier.size = 2.5,outlier.stroke = NA) +
     
-    # and a mean
-    stat_summary(
-      aes(x = train_type, y = accuracy, color = transfer),
-      fun = "mean", geom = "line", position = position_dodge(width = 0.9), linewidth = 1, alpha = 1
-    ) +
+    # opt 2: add a 95% confidence interval and mean
+    #stat_summary(aes(x = train_type, y = context_changes, color = switch),
+    #             fun.data = "mean_cl_normal",geom = "pointrange", position = position_dodge(width = .7), linewidth = 1, size = mk_sz/2) +
+    #stat_summary(aes(x = train_type, y = context_changes, color = switch),
+    #             fun = "mean", geom = "line", position = position_dodge(width = .7), linewidth = 1, alpha = 1) +
     
     # tidy
-    theme_minimal() +
-    scale_color_lancet(
-      name = "Transfer Type",
-      labels = c("Full","Partial")) + #c("Non-Switch", "Switch")) +
-    scale_x_discrete(labels = c("Low Switch", "High Switch")) +
-    labs(title = "", x = "Training Group", y = "Accuracy (%)") +
+    theme_classic() +
+    scale_colour_manual(values = c("#F8CF71","#ABEBC6"),
+                        name = "Trial Type",
+                        labels = c("Non-Switch","Switch")) +
+    scale_fill_manual(values = c("#F8CF71","#ABEBC6"),
+                      name = "Trial Type",
+                      labels = c("Non-Switch","Switch")) +
+    scale_x_discrete(labels = c("Low", "High")) +
+    labs(title = "", x = "Training Group", y = "Switch Rate") +
     theme(
       plot.title = element_text(size = label_sz),
       axis.text.x = element_text(size = label_sz), axis.text.y = element_text(size = label_sz), legend.text = element_text(size = label_sz),
@@ -123,4 +130,6 @@ if (ses == "ses-learn") {
 fnl <- file.path(project_path, "fig", paste(paste(exp, ses, "avg", sep = "_"), ".pdf",
   sep = ""
 ))
-ggsave(fnl, plot = last_plot())
+ggsave(fnl, plot = last_plot(), unit = "cm", width = 20, height = 17, limitsize = FALSE)
+
+
