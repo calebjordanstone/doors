@@ -1,0 +1,143 @@
+---
+title: "routine-individual-diffs-analysis-lt"
+format: html
+editor: visual
+---
+
+## How does the formation of routine impact learning transfer?
+
+We have formulated a measure of routine which we have calculated per person. We now want to understand how this impacted their capacity to transfer learning in the final stage.
+
+```{r}
+# first load some helpful libraries
+library(tidyverse)
+library(GGally)
+library(ez)
+library(wesanderson)
+library(vioplot)
+```
+
+### Sorting data
+
+First I will load and join the relevant data files. First the test data.
+
+```{r}
+exp_str = 'lt'
+
+test_dat = read.csv(file=paste("../../doors-data/data-wrangled/exp", exp_str, "avg.csv", sep="_"))
+test_dat = test_dat %>% filter(ses == 3) %>% select(sub, train_type, ses, transfer, accuracy)
+test_dat = test_dat %>% group_by(sub, train_type) %>% summarise(acc_diff = accuracy[transfer == 1] - accuracy[transfer == 2]) %>% ungroup()
+head(test_dat)
+
+```
+
+Next the Maggi K4 data
+
+```{r}
+
+k4_dat = read.csv(file=paste("../../doors-data/data-wrangled/exp", exp_str, "maggi-k4.csv", sep="_")) %>% select(sid, ses, transfer, k4_onset) %>% filter(ses == 3) %>%
+  group_by(sid, ses) %>% summarise(k4_diff = k4_onset[transfer == 1] - k4_onset[transfer == 2])
+names(k4_dat)[names(k4_dat) == "sid"] = "sub"
+head(k4_dat)
+```
+
+And now the routine measure data
+
+```{r}
+
+r_dat = read.csv(file=paste("../../doors-data/data-wrangled/exp", exp_str, "rscore.csv", sep="_"))
+head(r_dat)
+```
+
+Now I'll join the data all together
+
+```{r}
+
+all_dat <- inner_join(test_dat, k4_dat %>% select(sub, k4_diff),
+                      by=c("sub"))
+all_dat <- inner_join(all_dat, r_dat, by="sub")
+head(all_dat)
+```
+
+Now I have data, I can do a preliminary analysis.
+
+## Checking how routine was affected by group
+
+The variable group were less routine, as we would expect.
+
+```{r}
+all_dat$train_type <- as.factor(all_dat$train_type)
+levels(all_dat$train_type) <- c("stable", "variable")
+all_dat %>% ggplot(aes(x=log(r), fill=train_type, group=train_type)) + geom_density(alpha=0.5)
+```
+
+```{r}
+with(all_dat, t.test(log(r) ~ train_type))
+```
+
+This seems pretty sensible. Now I'll just do a qqplot to see how skewed the measures are.
+
+**First the measure of routine**
+
+```{r}
+
+all_dat %>% ggplot(aes(sample=r)) + stat_qq() + stat_qq_line()
+```
+
+A bit hairy. Will try logging to see if that improves things.
+
+```{r}
+
+all_dat %>% ggplot(aes(sample=log(r))) + stat_qq() + stat_qq_line()
+```
+
+That improves things a lot. Will keep the r measure logged.
+
+**Now the DVs**
+
+```{r}
+all_dat %>% ggplot(aes(sample=acc_diff)) + stat_qq() + stat_qq_line()
+```
+
+```{r}
+
+all_dat %>% ggplot(aes(sample=k4_diff)) + stat_qq() + stat_qq_line()
+```
+
+```{r}
+all_dat <- all_dat %>% mutate(log_r=log(r),
+                              log_acc_diff=log(acc_diff_4log))
+head(all_dat)
+```
+
+## Does routine formation predict differences between the learning transfer conditions?
+
+First, lets look at accuracy differences
+
+```{r}
+
+summary(lm(acc_diff ~ train_type + log_r, data = all_dat))
+```
+
+```{r}
+
+all_dat %>% ggplot(aes(x=log_r, y=acc_diff, group=train_type, colour=train_type)) +
+  geom_point()
+```
+
+Now lets look at the K4 difference
+
+```{r}
+
+idx <- is.infinite(all_dat$k4_diff) | is.nan(all_dat$k4_diff) 
+k4_dat <- all_dat[!idx, ]
+
+k4_dat %>% ggplot(aes(x=log_r, y=k4_diff, group=train_type, colour=train_type)) +
+  geom_point()
+```
+
+```{r}
+
+summary(lm(k4_diff ~ train_type + log_r, data = k4_dat))
+
+```
