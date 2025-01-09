@@ -20,10 +20,9 @@ r_dat <- read.csv(file=paste("../doors-data/data-wrangled/exp", exp_str,
 get_null_per_sub <- function(door_dat, r_dat, subN, cntxN){
   tmp <- door_dat$door[door_dat$sub == subN & door_dat$context_assign_ent == cntxN]
   tmp_null <- generate_null_for_one_person(tmp)
-  null_diff <- tmp_null - r_dat$r[r_dat$sub == subN & r_dat$context == cntxN] # thus,
-  # the more routine someone is, compared to their null, the higher these 
-  # numbers are
-  tibble(sub = subN, context=cntxN, null_diff = null_diff)
+  # the more chaotic someone is, the higher their null distribution will be
+  tibble(sub = subN, context=cntxN, null = tmp_null, 
+         r = r_dat$r[r_dat$sub == subN & r_dat$context == cntxN])
 }
 
 ###################################################################

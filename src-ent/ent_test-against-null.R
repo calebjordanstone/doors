@@ -21,3 +21,6 @@ data <- list("y" = dat$null_diff,
 
 ##################################################################
 # now run the model
+model <- stan_model("src-ent/model-files/hierarchical_normal_cp.stan")
+fit <- sampling(model, data, iter=1000, chains=4)
+traceplot(fit)
