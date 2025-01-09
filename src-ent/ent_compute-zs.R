@@ -25,8 +25,8 @@ rm(dat)
 # by group and context (although the latter is kinda meaningless)
 tmp <- read.csv(file=paste("../doors-data/data-wrangled/exp", exp_str, 
                                     "avg.csv", sep="_"))
-tmp <- tmp %>% filter(ses == 2) %>% select(sub, train_type)
-zdat <- inner_join(tmp, zdat, by="sub", relationship = "many-to-many")
+tmp <- tmp %>% filter(ses == 2) %>% select(sub, train_type) %>% distinct()
+zdat <- inner_join(zdat, tmp, by="sub", relationship = "many-to-many")
 rm(tmp)
 
 ###############################################################
@@ -43,3 +43,4 @@ t.test(zdat$z[zdat$context == 2], mu=0, alternative="less")
 # and against -2
 t.test(zdat$z[zdat$context == 1], mu=-2, alternative="less")
 t.test(zdat$z[zdat$context == 2], mu=-2, alternative="less")
+
