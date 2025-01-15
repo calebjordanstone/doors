@@ -1,5 +1,6 @@
 # K. Garner, 2025, a set of functions to help with the analyses
 
+### functions to compute routine scores
 H <- function(x){
   # to be applied over the rows of the matrix of transitions
   -sum(x * log(x), na.rm = TRUE)
@@ -23,8 +24,10 @@ p_st1_gs <- function(counts_matrix, n_doors){
   out
 }
 
+### functions to generate null distributions and random agents
 sample_non_consec <- function(observed_data){
-  
+  # generate a null set of responses for an individual base on 
+  # their observed responses
   n = length(observed_data) # this is the length of the sequence we will generate
   out = rep(0, times=n)
   out[1] <- sample(observed_data, 1)
@@ -45,6 +48,63 @@ generate_null_for_one_person <- function(observed_data, n_samples = 1000, n_door
   null_Rs
 }
 
+random_agent_responses <- function(doors=c(1,2,3,4)){
+  # generate a task environment and have an agent complete it randomly
+  ntrls <- 160
+  trls <- sample(doors, size=ntrls, replace=TRUE)
+  
+  # now assuming a perfectly random agent that knows the task perfectly,
+  # generate responses to complete the task
+  rsps <- c()
+  for (i in trls){
+    
+    if (is.null(rsps)){
+      rsps_i <- sample(doors, 1) # pick first response
+    } else {
+      poss_values <- setdiff(doors, tail(rsps,1))
+      rsps_i <- sample(poss_values, 1)
+    }
+    tgt_i <- i
+    tgt_fnd = 0
+    while(!tgt_fnd){
+      
+      if (tail(rsps_i, 1) == tgt_i){
+        tgt_fnd = 1 
+      }
+      # get the remaining doors and pick the next response
+      if(!tgt_fnd){
+        poss_values <- setdiff(doors, tail(rsps_i,1))
+        rsps_i <- c(rsps_i, sample(poss_values, 1))
+      }
+    }
+    # print(rsps_i)
+    # add this trial to the responses
+    rsps <- c(rsps, rsps_i)
+  }
+  rsps
+}
+
+null_z_for_random_agent <- function(n_doors = 16){
+  
+  # generate the random agents responses
+  resps <- random_agent_responses()
+  
+  # take the random agents null data and generate their 
+  # r score, as well as a null distribution
+  # get their transition counts, probability matrix, and ent
+  counts <- data_2_counts_matrix(resps, n_doors = n_doors)
+  probs <- p_st1_gs(counts, n_doors = n_doors)
+  ent <- sum(apply(probs, 1, H))
+  
+  # get their null distribution
+  tmp_null <- generate_null_for_one_person(resps)
+  
+  # compute their z score and output
+  z <- (ent-mean(tmp_null))/sd(tmp_null)
+  z
+}
+
+### various indexing functions to help analysis
 get_context_swch_idx_per_prsn <- function(dat, subN){
   # ugly function to do the sorting/splitting of data as follows:
   ## now how to split the data up? First, by context.
@@ -86,5 +146,19 @@ get_context_swch_idx_per_prsn <- function(dat, subN){
     tmp$context_assign_ent[swch_strs[i]:fll_idxs[i]] <- tmp$context_assign_ent[swch_strs[i]-1]
   }
   
+  tmp
+}
+
+counts_since_last_switch <- function(dat, subN, cntxtN){
+  # count up how many selections since the last switch
+  tmp <- dat %>% filter(sub == subN & context_assign_ent == cntxtN)
+  cnt_idx = which(!!tmp$switch_assign)
+  max_vals = diff(cnt_idx) # what to count up to each time
+  max_vals = c(max_vals, nrow(tmp) - tail(cnt_idx, 1) + 1)
+  mk_cnt_vector <- function(x){
+    1:x
+  }
+  out <- unlist(lapply(max_vals, mk_cnt_vector))
+  tmp$selections_since_last_context_switch = out
   tmp
 }
