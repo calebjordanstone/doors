@@ -34,7 +34,7 @@ rm(tmp)
 # likely contain no effect
 zdat %>% ggplot(aes(x=z, colour=as.factor(train_type), 
                     fill=as.factor(train_type), group=as.factor(train_type))) +
-  geom_density(alpha=0.5) + facet_wrap(~context)
+  geom_histogram(alpha=0.5) + xlim(-300, 10) + facet_wrap(~context)
 
 ###############################################################
 # now test the z-scores against zero

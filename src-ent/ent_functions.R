@@ -29,13 +29,7 @@ sample_non_consec <- function(observed_data){
   # generate a null set of responses for an individual base on 
   # their observed responses
   n = length(observed_data) # this is the length of the sequence we will generate
-  out = rep(0, times=n)
-  out[1] <- sample(observed_data, 1)
-  values <- unique(observed_data)
-  for (i in 2:length(out)){
-    poss_values <- setdiff(values, out[i - 1])
-    out[i] <- sample(poss_values, 1)
-  }
+  out = sample(observed_data, size=n, replace=FALSE)
   out
 }
 
@@ -58,28 +52,23 @@ random_agent_responses <- function(doors=c(1,2,3,4)){
   rsps <- c()
   for (i in trls){
     
-    if (is.null(rsps)){
       rsps_i <- sample(doors, 1) # pick first response
-    } else {
-      poss_values <- setdiff(doors, tail(rsps,1))
-      rsps_i <- sample(poss_values, 1)
-    }
-    tgt_i <- i
-    tgt_fnd = 0
-    while(!tgt_fnd){
+      tgt_i <- i # get the target for this trial
+      tgt_fnd = 0
       
-      if (tail(rsps_i, 1) == tgt_i){
-        tgt_fnd = 1 
-      }
+      while(!tgt_fnd){
+      
+        if (tail(rsps_i, 1) == tgt_i){
+          tgt_fnd = 1 
+        }
       # get the remaining doors and pick the next response
-      if(!tgt_fnd){
-        poss_values <- setdiff(doors, tail(rsps_i,1))
-        rsps_i <- c(rsps_i, sample(poss_values, 1))
+        if(!tgt_fnd){
+          rsps_i <- c(rsps_i, sample(doors, 1))
+        }
       }
-    }
-    # print(rsps_i)
-    # add this trial to the responses
-    rsps <- c(rsps, rsps_i)
+      # print(rsps_i)
+      # add this trial to the responses
+      rsps <- c(rsps, rsps_i)
   }
   rsps
 }

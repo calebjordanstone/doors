@@ -1,0 +1,153 @@
+---
+title: "ent_model-impacts"
+format: html
+editor: visual
+---
+
+## Modelling the impact of the training manipulation on routine formation
+
+```{r}
+
+library(tidyverse)
+source('/home/kgarner/Documents/projects/doors/src-ent/ent_functions.R')
+```
+
+We know that the training manipulation impacts our measure of routines. The next question is what the two groups learned over the course of the routine.
+
+## Hyotheses
+
+We seek to test the following hypotheses:
+
+1.  The rapid switch group mixed up the tasks early on and they stayed mixed up. This assumes the probability of other context (oc) errors is uniform across the session.
+2.  All people were more likely to mix up the tasks the more switches they experienced. This assumes that the probability of oc errors follows a step function, with p(oc) increasing with each time the target found belongs to the context that is **not** the context where the last target was found.
+3.  People learned the switch rate - i.e. the probability of oc follows n_tgt_switches / n_trials.
+4.  People learned to track the probability of a switch, given the number of targets already found in the current context. i.e. p(tgt found in new context \| n targets found in old context)
+5.  People track the probability of the context, given the number of non-target doors they have selected from the current context
+
+Note that we can ask whether these factors influenced the probability of oc responses, and the probability of nc responses, to see if the proposed process influenced the mixing of task sets, or general confusion.
+
+## Defining the model to test the four hypotheses
+
+For each subject, we can model the probability of a given response being from the oc (or nc) class, using the following logistic regression:
+
+$$
+\mathrm{OC_1} \sim B(n, p_i) \\
+\mathrm{log}(\frac{p_i}{1-p_i}) = \beta_0 + \beta \mathrm{Sw} + \beta \mathrm{Tgt} + \beta t_i + \beta \mathrm{N_{0|c}} + \epsilon
+$$
+
+where Sw is the number of switches experienced to this point, Tgt is the number of switches that have occurred after finding that many targets (in the past), t is the number of trials, and N_0\|c is the number of non-target doors drawn from the last rewarded context on that trial.
+
+**An oc response is defined as the number of selections from the context that you were not last rewarded from.**
+
+### Demonstrating the regressors track and behave in line with the hypotheses we seek to test
+
+Here I load in data from one participant, compute the regressors, and plot them to show they predict what we think.
+
+```{r}
+
+# get data, and select what needed
+dat <- read.csv('/home/kgarner/Documents/projects/doors-data/data-wrangled/exp_lt_evt.csv') %>% 
+  filter(sub == 3 & ses == 2) %>% 
+  select(sub, t, context, door, door_cc, door_oc, door_nc, switch)
+
+
+```
+
+First we build the Sw regressor
+
+```{r}
+
+get_Sw <- function(dat, subN){
+  # this regrssor computes the number of times a target has been found in a context that is different to where the preceeding context was found, and creates a regressor as long as the responses that reflects this
+  # the logical conditions for this are:
+  # 1. is this a switch trial? yes/no - is 'switch' a 1?
+  # 2. when is the end of the switch trial (this means the target has been found)
+  #     for 2: I can get the trial numbers of each switch trial, and then find the 
+  #           last entry in the data frame that corresponds to that trial number. 
+  # 3. from sw_end + 1, the count goes up
+  #     The row after the last entry above is sw+1
+  
+  tmp <- dat %>% filter(sub == subN)
+  sw <- rep(0, nrow(tmp))
+  sw_trls <- unique(tmp$t[as.logical(tmp$switch)]) # this gives me the trial numbers where a switch occurred
+  sw_tgts_idx <- unlist(lapply(sw_trls, function(x) tail(which(tmp$t == x), 1))) 
+  cumsum = 0:length(sw_tgts_idx)
+  # add final row of dataframe to idx
+  sw_tgts_idx <- c(sw_tgts_idx, nrow(tmp))
+  rep_idx <- c(sw_tgts_idx[1], diff(sw_tgts_idx)) # now get number of times each switch should be repeated, before the next switch
+  sw <- rep(cumsum, times = rep_idx)
+  tmp$Sw <- sw
+  tmp
+}
+
+dat <- get_Sw(dat, 3)
+dat %>% group_by(t) %>% summarise(sw = Sw[1]) %>% ggplot(aes(x=t, y=sw)) + geom_line()
+```
+
+We already have the trial number vector, so this combined with Sw will give us switch rate. Specifically:
+
+```{r}
+
+dat %>% group_by(t) %>% summarise(sw = Sw[1]) %>% mutate(sr = sw/t) %>% 
+  ggplot(aes(x=t, y=sr)) + geom_line()
+
+```
+
+The next regressor is: People learned to track the probability of a switch, given the number of targets already found in the current context. i.e. p(tgt found in new context \| n targets found in old context).
+
+How likely is it that I am in the next context, given the number of targets I have found in the other context.
+
+Thus, if I found a target in context 2, how many targets did I find in context 1 before this?
+
+How often do I find that many targets in context 1, before finding 1 in context 2?
+
+To calculate this I need to know:
+
+1.  On switch trials, where I inevitably find a target in context 2 (e.g.), how many targets were found in context 1, before this?
+2.  add an increment to the number of times that many targets were found in the other context.
+3.  now, I did the update because I realised the world had switched. Thus I am now in number 1 of context 2. So the next trial is the second trial of context 2.
+
+```{r}
+
+get_Tgtsp <- function(dat, subN){
+  # in this regressor, we learn the number of times a target was found in the other context, when the previous N targets were from the other context.
+  # For this, we need
+  # 1. to find every non-switch trial
+  # 2. number each trial for how far it is from the previous switch trial. This is how many targets have been found in the current context.
+  # 3. do a culmulative sum of how many times each number occurs
+  # 4. create a vector that increments the culmulative sum
+  
+  # get subject data
+  tmp <- dat %>% filter(sub == subN)
+  
+  swch_idx <- unique(tmp$t[dat$switch == 1])
+  n_til_swch <- c(swch_idx[1]-1, diff(swch_idx)) # this gives us, from the first trial onwards, how many targets were found in the current context, up to the switch -aka a target being found in the other context. 
+  # now, I want to culmulatively learn how many of each number have occurred at each point in the sequence
+  # I make a matrix that has as columns the number of unique values in n_til_swch, and as many rows as the length of n_til_swch
+  counts <- matrix(rep(0, max(n_til_swch)*length(n_til_swch)), 
+                   nrow=length(n_til_swch))
+  colnames(counts) = paste(1:max(n_til_swch))
+  # next, I want to know, for every element in n_til_swch, how many times has each possible element occurred up until that point?
+  for (i in 1:length(n_til_swch)){
+    
+    hist <- n_til_swch[1:i] # get the experience up until this point
+    cnts_til_now <- table(hist) # how many times has each one happened until now?
+    counts[i, names(cnts_til_now)] <- cnts_til_now
+  }
+  # ok, now for every time there is a switch, I have the number of times the number of doors found in the previous context has occurred. 
+  rownames(counts) = swch_idx # this now tells me, for every switch trial, how many times 1 target was found before a switch target, how many times 2 targets were found before a switch target, and so on...
+  # so now what is left to do, is to get the number of trials between each switch, I can then label each incremental trial with the appropriate number from the row of the switch matrix - aka for the 1st trial after each switch target, I put the value in col 1, for the second trial after each switch target, I put in the value from col 2, and so on.
+  
+  swch_idx <- swch_idx # where each switch starts
+  end_idx <- c(swch_idx[2:length(swch_idx)], max(tmp$t))
+  swch_idx <- swch_idx + 1 # to reflect updating after switches
+  TgtsN <- rep(0, times=max(tmp$t))
+  for (i in 1:length(swch_idx)){
+    TgtsN[ swch_idx[i]:end_idx[i] ] <- counts[ paste(swch_idx[i]-1), 
+                                               1:(length(swch_idx[i]:end_idx[i])) ]
+  }
+  TgtsN <- tibble(tgtsN = TgtsN, t = 1:320)
+  tmp <- inner_join(tmp, TgtsN, by="t")
+  tmp
+}
+```
