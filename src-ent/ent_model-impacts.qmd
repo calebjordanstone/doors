@@ -9,7 +9,7 @@ editor: visual
 ```{r}
 
 library(tidyverse)
-id = 'kelly'
+id = 'kgarner'
 source(paste('/home', id, 'Documents/projects/doors/src-ent/ent_functions.R', sep='/'))
 ```
 
@@ -163,7 +163,118 @@ dat %>% group_by(t) %>% summarise(tgtN = TgtN[1]) %>% ggplot(aes(x=t, y=tgtN)) +
 
 ```{r}
 
-with(dat, cor.test(Sw, TgtN))
+with(dat, cor(Sw, TgtN)) # check correlation between regressors
 ```
 
 **Last one**: People track the probability of the context, given the number of non-target doors they have selected from the current context, since selection of the last target.
+
+Using Bayes theorem, we can cast the probability that you are still in $C_A$, given you have observed n and m false doors:
+
+$$P(C = A | n, m) = \frac{ P(n,m|C=A)P(C=A)}{P(n,m)}$$
+
+Here is the formula in a function:
+
+```{r}
+
+get_prob_context <- function(priors, ps_g_c, n, m){
+  # n is a string, matching the name of the number of n drawn
+  # note that m doesn't require definition for the first prior (nor n for the second), as p(m) given the other context is always 1, thus any number of m is implicit in the calculation
+  ps_g_c[n]*priors[1]/(ps_g_c[n]*priors[1] + ps_g_c[m]*priors[2])
+}
+```
+
+For this, I will need the following columns of information:
+
+1.  p(context A) given experience
+2.  For each trial, the ongoing number of fails from the context for which you were last rewarded
+3.  For each trial, the ongoing number of fails from the context for which you were not last rewarded
+
+```{r}
+
+get_p_context <- function(dat, subN){
+  # for each trial, get the probability of being in the same context as the last rewarded trial
+  
+  tmp <- dat %>% filter(sub == subN)
+  ##############################################
+  # apply an update for each trial that reflects the probability of being in
+  # the last context in which you were rewarded
+  rw_idx <- c(with(tmp, which(diff(t) != 0)), nrow(tmp)) # get the row numbers where each trial ends, this will allow me to pull out the context for each trial
+  cntx <- with(tmp, context[rw_idx]) # get the pattern of context changes
+  pA <- 0
+  pB <- 0
+  for (i in 1:(length(cntx)-1)){ # -1 reflects we won't apply an update after the last trial
+    pA <- c(pA, sum(cntx[1:i] < 2)/i)
+    pB <- c(pB, sum(cntx[1:i] > 1)/i)
+  }
+  ts <- with(tmp, unique(t))
+  tmp <- inner_join(tmp, tibble(t = ts, pC1 = pA, pC2 = pB), by="t") 
+  ####################################
+  
+  ######################################
+  # now I need for each trial, the number of n's (fails from the same context as the previous), and the number of m's (fails from the different 
+  # context as the previous)
+  # first, get the previously rewarded context
+  tmp <- inner_join(tmp, tibble(t = unique(ts), 
+                                prv_cntx = c(0, cntx[1:(length(ts)-1)])),
+                    by="t")
+  
+  ## now I need to recode cc and oc responses as following:
+  ## if current context == 1 & prev context == 1, n = cc, m = oc
+  ## if current context == 1 & prev context == 2, n = oc, m = cc
+  ## if current context == 2 & prev context == 2, n = cc, m = oc
+  ## if current context == 2 & prev context == 1, n = oc, m = cc
+  tmp$door_n <- 0
+  tmp$door_m <- 0
+  tmp$door_n[tmp$context == tmp$prv_cntx] <- tmp$door_cc[tmp$context == tmp$prv_cntx]
+  # row 1 from comments above
+  tmp$door_n[tmp$context != tmp$prv_cntx] <- tmp$door_oc[tmp$context != tmp$prv_cntx] # row 2 from comments above 
+  tmp$door_m[tmp$context == tmp$prv_cntx & tmp$prv_cntx > 0] <- 
+    tmp$door_oc[tmp$context == tmp$prv_cntx & tmp$prv_cntx > 0] # row 3
+  tmp$door_m[tmp$context != tmp$prv_cntx  & tmp$prv_cntx > 0] <- 
+    tmp$door_cc[tmp$context != tmp$prv_cntx & tmp$prv_cntx > 0] # row 4
+#####NOTE: door_m is also our DV
+################################################################
+  
+#############################################################
+  # next, remove the last door selection from each trial, as that was a hit (not a null)
+  tmp <- tmp[-rw_idx,]
+  
+  ## now by trial, compute the cumulative sum of door_n and door_m
+  tmp <- tmp %>% group_by(t) %>% mutate(sum_n = cumsum(door_n),
+                                        sum_m = cumsum(door_m)) 
+#############################################################
+  
+#############################################################
+  # now make 2 new variables, that redistribute pC1 and pC2 to be relative 
+  # to the context in which the last participant was rewarded. e.g. if my last
+  # reward was in context 2, then I want the probability of being in pC2 for the 
+  # previous context variable, and pC1 for the other context variable
+  tmp$p_prv_cntxt <- 0 # establish variables
+  tmp$p_oth_cntxt <- 0
+  tmp$p_prv_cntxt[tmp$prv_cntx == 1] <- tmp$pC1[tmp$prv_cntx == 1]
+  tmp$p_prv_cntxt[tmp$prv_cntx == 2] <- tmp$pC2[tmp$prv_cntx == 2]
+  tmp$p_oth_cntxt[tmp$prv_cntx == 1] <- tmp$pC2[tmp$prv_cntx == 1]
+  tmp$p_oth_cntxt[tmp$prv_cntx == 2] <- tmp$pC1[tmp$prv_cntx == 2]
+ #############################################################
+  
+#############################################################
+  # next, I need a column giving the probability of n or m nulls, given you are
+  # in the previously rewarded context (for n), or the other context (for m)
+  p_vals <- c(1, .75, .5, .25, 0)
+  tmp$pNgCr <- p_vals[as.factor(tmp$sum_n)]
+  tmp$pMgOc <- p_vals[as.factor(tmp$sum_m)]
+  tmp$pNgCr[is.na(tmp$pNgCr)] <- 0
+  tmp$pMgOc[is.na(tmp$pMgOc)] <- 0
+#############################################################
+
+#############################################################
+  ##### now work out the probability of the context, given n & m
+  tmp <- tmp %>% mutate(N_oc = pNgCr*p_prv_cntxt/  (pNgCr*p_prv_cntxt + pMgOc*p_oth_cntxt))
+#############################################################  
+  tmp
+}
+```
+
+```{r}
+dat <- get_p_context(dat, 3)
+```
