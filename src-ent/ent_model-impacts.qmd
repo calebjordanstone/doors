@@ -21,8 +21,8 @@ We seek to test the following hypotheses:
 1.  The rapid switch group mixed up the tasks early on and they stayed mixed up. This assumes the probability of other context (oc) errors is uniform across the session.
 2.  All people were more likely to mix up the tasks the more switches they experienced. This assumes that the probability of oc errors follows a step function, with p(oc) increasing with each time the target found belongs to the context that is **not** the context where the last target was found.
 3.  People learned the switch rate - i.e. the probability of oc follows n_tgt_switches / n_trials.
-4.  People learned to track the probability of a switch, given the number of targets already found in the current context. i.e. p(tgt found in new context \| n targets found in old context)
-5.  People track the probability of the context, given the number of non-target doors they have selected from the current context
+4.  People learned to track the probability of a switch, given the number of targets already found in the current context. i.e. how many times before did I do X number of trials and not switch?
+5.  People track the probability of the context, given the number of non-target doors they have selected from the current context, since selection of the last target
 
 Note that we can ask whether these factors influenced the probability of oc responses, and the probability of nc responses, to see if the proposed process influenced the mixing of task sets, or general confusion.
 
@@ -32,7 +32,7 @@ For each subject, we can model the probability of a given response being from th
 
 $$
 \mathrm{OC_1} \sim B(n, p_i) \\
-\mathrm{log}(\frac{p_i}{1-p_i}) = \beta_0 + \beta \mathrm{Sw} + \beta \mathrm{Tgt} + \beta t_i + \beta \mathrm{N_{0|c}} + \epsilon
+\mathrm{log}(\frac{p_i}{1-p_i}) = \beta_0 + \beta \mathrm{Sw} + \beta \mathrm{TgtN} + \beta t_i + \beta \mathrm{N_{0|c}} + \epsilon
 $$
 
 where Sw is the number of switches experienced to this point, Tgt is the number of switches that have occurred after finding that many targets (in the past), t is the number of trials, and N_0\|c is the number of non-target doors drawn from the last rewarded context on that trial.
@@ -93,23 +93,17 @@ dat %>% group_by(t) %>% summarise(sw = Sw[1]) %>% mutate(sr = sw/t) %>%
 
 ```
 
-The next regressor is: People learned to track the probability of a switch, given the number of targets already found in the current context. i.e. p(tgt found in new context \| n targets found in old context).
+The next regressor is: How many times before did I select X number of targets and not experience a switch?
 
-How likely is it that I am in the next context, given the number of targets I have found in the other context.
+I will initialise this regressor with a 1, to reflect the idea that people know a switch could happen any time.
 
-Thus, if I found a target in context 2, how many targets did I find in context 1 before this?
+Whenever I hit a target from a switch trial, I look back and count how many targets (N) there were in the other context before I hit this switch. I add a 1 to the tally for the 1:N elements.
 
-How often do I find that many targets in context 1, before finding 1 in context 2?
-
-To calculate this I need to know:
-
-1.  On switch trials, where I inevitably find a target in context 2 (e.g.), how many targets were found in context 1, before this?
-2.  add an increment to the number of times that many targets were found in the other context.
-3.  now, I did the update because I realised the world had switched. Thus I am now in number 1 of context 2. So the next trial is the second trial of context 2.
+I then label the next trial forwards with the number from my ongoing tally.
 
 ```{r}
 
-get_Tgtsp <- function(dat, subN){
+get_TgtN <- function(dat, subN){
   # in this regressor, we learn the number of times a target was found in the other context, when the previous N targets were from the other context.
   # For this, we need
   # 1. to find every non-switch trial
@@ -123,31 +117,63 @@ get_Tgtsp <- function(dat, subN){
   swch_idx <- unique(tmp$t[dat$switch == 1])
   n_til_swch <- c(swch_idx[1]-1, diff(swch_idx)) # this gives us, from the first trial onwards, how many targets were found in the current context, up to the switch -aka a target being found in the other context. 
   # now, I want to culmulatively learn how many of each number have occurred at each point in the sequence
-  # I make a matrix that has as columns the number of unique values in n_til_swch, and as many rows as the length of n_til_swch
-  counts <- matrix(rep(0, max(n_til_swch)*length(n_til_swch)), 
-                   nrow=length(n_til_swch))
-  colnames(counts) = paste(1:max(n_til_swch))
-  # next, I want to know, for every element in n_til_swch, how many times has each possible element occurred up until that point?
-  for (i in 1:length(n_til_swch)){
-    
-    hist <- n_til_swch[1:i] # get the experience up until this point
-    cnts_til_now <- table(hist) # how many times has each one happened until now?
-    counts[i, names(cnts_til_now)] <- cnts_til_now
-  }
-  # ok, now for every time there is a switch, I have the number of times the number of doors found in the previous context has occurred. 
-  rownames(counts) = swch_idx # this now tells me, for every switch trial, how many times 1 target was found before a switch target, how many times 2 targets were found before a switch target, and so on...
-  # so now what is left to do, is to get the number of trials between each switch, I can then label each incremental trial with the appropriate number from the row of the switch matrix - aka for the 1st trial after each switch target, I put the value in col 1, for the second trial after each switch target, I put in the value from col 2, and so on.
+  # First, I make a vector that has as many elements 1:max(in n_til_swch)
+  counts <- rep(1, max(n_til_swch))
+  names(counts) = paste(1:max(n_til_swch))
+  # next, I want to know, for every element in n_til_swch, how many times has 1:each possible element occurred up until that point?
+  tgtNs <- list()
   
+  for (i in 1:length(n_til_swch)){
+    thisN = n_til_swch[i] # how many trials between the last two switches?
+    update_idxs <- paste(1:thisN) 
+    counts[update_idxs] <- counts[update_idxs] + 1
+    tgtNs[[i]] <- counts
+  }
+  # now I have the estimate of the hazard function, computed once the target is found on every switch trial.
+  # the next step is to from each swch trial to the next one, fill out the number of trials with the estimates of the hazard function. For example, if the first switch was on trial 2, and the next was on trial 5, then I apply the first 3 elements of the first estimate to trials 3, 4, & 5
   swch_idx <- swch_idx # where each switch starts
   end_idx <- c(swch_idx[2:length(swch_idx)], max(tmp$t))
   swch_idx <- swch_idx + 1 # to reflect updating after switches
-  TgtsN <- rep(0, times=max(tmp$t))
-  for (i in 1:length(swch_idx)){
-    TgtsN[ swch_idx[i]:end_idx[i] ] <- counts[ paste(swch_idx[i]-1), 
-                                               1:(length(swch_idx[i]:end_idx[i])) ]
+  names(tgtNs) <- swch_idx
+  
+  # now I have the indexs, I can do the updating
+  get_estimates_for_trials <- function(strti, endi, tgtNs){
+    t <- strti:endi
+    ests <- tgtNs[[paste(strti)]][1:length(strti:endi)]
+    tibble(t = t,
+          TgtN = ests)
   }
-  TgtsN <- tibble(tgtsN = TgtsN, t = 1:320)
-  tmp <- inner_join(tmp, TgtsN, by="t")
+  ests <- do.call(rbind, mapply(get_estimates_for_trials, swch_idx, end_idx,
+                        MoreArgs = list(tgtNs), SIMPLIFY = FALSE))
+  # add the first trials to the end of the tibble
+  ests <- rbind(ests, tibble(t=1:(swch_idx[1]-1),
+                     TgtN = rep(1, length(1:(swch_idx[1]-1)))))
+  
+  tmp <- inner_join(tmp, ests, by="t")
   tmp
 }
+
+dat <- get_TgtN(dat, 3)
+
+dat %>% group_by(t) %>% summarise(tgtN = TgtN[1]) %>% ggplot(aes(x=t, y=tgtN)) + geom_line()
+
 ```
+
+Again, dividing by the trial number gives a nice approximation to the rate
+
+```{r}
+
+dat %>% group_by(t) %>% summarise(tgtN = TgtN[1]) %>% mutate(tr = tgtN/t) %>% 
+  ggplot(aes(x=t, y=tr)) + geom_line()
+```
+
+**Problem is this is highly correlated with the number of switches regressor**
+
+```{r}
+
+with(dat, cor.test(Sw, TgtN))
+```
+
+Will come back to this. Could make a probability vector anyway.
+
+**Next one is**: People track the probability of the context, given the number of non-target doors they have selected from the current context, since selection of the last target
