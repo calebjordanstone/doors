@@ -9,7 +9,8 @@ editor: visual
 ```{r}
 
 library(tidyverse)
-source('/home/kgarner/Documents/projects/doors/src-ent/ent_functions.R')
+id = 'kelly'
+source(paste('/home', id, 'Documents/projects/doors/src-ent/ent_functions.R', sep='/'))
 ```
 
 We know that the training manipulation impacts our measure of routines. The next question is what the two groups learned over the course of the routine.
@@ -46,7 +47,7 @@ Here I load in data from one participant, compute the regressors, and plot them 
 ```{r}
 
 # get data, and select what needed
-dat <- read.csv('/home/kgarner/Documents/projects/doors-data/data-wrangled/exp_lt_evt.csv') %>% 
+dat <- read.csv(paste('/home', id, 'Documents/projects/doors-data/data-wrangled/exp_lt_evt.csv', sep='/')) %>% 
   filter(sub == 3 & ses == 2) %>% 
   select(sub, t, context, door, door_cc, door_oc, door_nc, switch)
 
@@ -118,7 +119,7 @@ get_TgtN <- function(dat, subN){
   n_til_swch <- c(swch_idx[1]-1, diff(swch_idx)) # this gives us, from the first trial onwards, how many targets were found in the current context, up to the switch -aka a target being found in the other context. 
   # now, I want to culmulatively learn how many of each number have occurred at each point in the sequence
   # First, I make a vector that has as many elements 1:max(in n_til_swch)
-  counts <- rep(1, max(n_til_swch))
+  counts <- rep(0, max(n_til_swch))
   names(counts) = paste(1:max(n_til_swch))
   # next, I want to know, for every element in n_til_swch, how many times has 1:each possible element occurred up until that point?
   tgtNs <- list()
@@ -126,8 +127,9 @@ get_TgtN <- function(dat, subN){
   for (i in 1:length(n_til_swch)){
     thisN = n_til_swch[i] # how many trials between the last two switches?
     update_idxs <- paste(1:thisN) 
-    counts[update_idxs] <- counts[update_idxs] + 1
-    tgtNs[[i]] <- counts
+    counts[update_idxs] <- (counts[update_idxs] + 1)
+    ps = counts/sum(counts) # convert to probabililty
+    tgtNs[[i]] <- ps
   }
   # now I have the estimate of the hazard function, computed once the target is found on every switch trial.
   # the next step is to from each swch trial to the next one, fill out the number of trials with the estimates of the hazard function. For example, if the first switch was on trial 2, and the next was on trial 5, then I apply the first 3 elements of the first estimate to trials 3, 4, & 5
@@ -147,7 +149,7 @@ get_TgtN <- function(dat, subN){
                         MoreArgs = list(tgtNs), SIMPLIFY = FALSE))
   # add the first trials to the end of the tibble
   ests <- rbind(ests, tibble(t=1:(swch_idx[1]-1),
-                     TgtN = rep(1, length(1:(swch_idx[1]-1)))))
+                     TgtN = rep(0, length(1:(swch_idx[1]-1)))))
   
   tmp <- inner_join(tmp, ests, by="t")
   tmp
@@ -159,21 +161,9 @@ dat %>% group_by(t) %>% summarise(tgtN = TgtN[1]) %>% ggplot(aes(x=t, y=tgtN)) +
 
 ```
 
-Again, dividing by the trial number gives a nice approximation to the rate
-
-```{r}
-
-dat %>% group_by(t) %>% summarise(tgtN = TgtN[1]) %>% mutate(tr = tgtN/t) %>% 
-  ggplot(aes(x=t, y=tr)) + geom_line()
-```
-
-**Problem is this is highly correlated with the number of switches regressor**
-
 ```{r}
 
 with(dat, cor.test(Sw, TgtN))
 ```
 
-Will come back to this. Could make a probability vector anyway.
-
-**Next one is**: People track the probability of the context, given the number of non-target doors they have selected from the current context, since selection of the last target
+**Last one**: People track the probability of the context, given the number of non-target doors they have selected from the current context, since selection of the last target.
