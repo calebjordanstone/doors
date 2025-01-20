@@ -10,8 +10,9 @@ editor: visual
 
 library(tidyverse)
 library(GGally)
+library(gridExtra)
 
-id = 'kelly'
+id = 'kgarner'
 source(paste('/home', id, 'Documents/projects/doors/src-ent/ent_functions.R', sep='/'))
 ```
 
@@ -49,7 +50,7 @@ Here I load in data from one participant, compute the regressors, and plot them 
 ```{r}
 
 # get data, and select what needed
-subN = 50
+subN = 4
 dat <- read.csv(paste('/home', id, 'Documents/projects/doors-data/data-wrangled/exp_lt_evt.csv', sep='/')) %>% 
   filter(sub == subN & ses == 2) %>% 
   select(sub, t, context, door, door_cc, door_oc, door_nc, switch)
@@ -85,14 +86,14 @@ get_Sw <- function(dat, subN){
 }
 
 dat <- get_Sw(dat, subN = subN)
-dat %>% group_by(t) %>% summarise(sw = Sw[1]) %>% ggplot(aes(x=t, y=sw)) + geom_line()
+Sw_p <- dat %>% group_by(t) %>% summarise(sw = Sw[1]) %>% ggplot(aes(x=t, y=sw)) + geom_line()
 ```
 
 We already have the trial number vector, so this combined with Sw will give us switch rate. Specifically:
 
 ```{r}
 
-dat %>% group_by(t) %>% summarise(sw = Sw[1]) %>% mutate(sr = sw/t) %>% 
+Sw_r_p <- dat %>% group_by(t) %>% summarise(sw = Sw[1]) %>% mutate(sr = sw/t) %>% 
   ggplot(aes(x=t, y=sr)) + geom_line()
 
 ```
@@ -160,7 +161,7 @@ get_TgtN <- function(dat, subN){
 
 dat <- get_TgtN(dat, subN = subN)
 
-dat %>% group_by(t) %>% summarise(tgtN = TgtN[1]) %>% ggplot(aes(x=t, y=tgtN)) + geom_line()
+TgtN_p <- dat %>% group_by(t) %>% summarise(tgtN = TgtN[1]) %>% ggplot(aes(x=t, y=tgtN)) + geom_line()
 
 ```
 
@@ -322,7 +323,9 @@ get_p_context <- function(dat, subN){
   ##### trial (i.e. the info from 1:t-1)
   ##### so the I can compute on each trial, the probability of being in the same context given that
   ##### many ns and ms that have been discovered up until now
-  tmp <- tmp %>% mutate(N_oc = p_n_g_sC*psC /  (p_n_g_sC*psC + p_m_g_dC*pdC))
+  ##### I will then substract that from 1, to get the probability you are in 
+  ##### the other context. This will help with interpretability.
+  tmp <- tmp %>% mutate(N_oc = 1-(p_n_g_sC*psC /  (p_n_g_sC*psC + p_m_g_dC*pdC)))
 #############################################################  
   tmp
 }
@@ -331,7 +334,7 @@ get_p_context <- function(dat, subN){
 ```{r}
 dat <- get_p_context(dat, subN = subN)
 
-dat %>% ggplot(aes(x=t, y=N_oc)) + geom_line()
+N_oc_p <- dat %>% ggplot(aes(x=t, y=N_oc)) + geom_line()
 ```
 
 Okies, now I have all the regressors, I am going to do a pairs plot to check for correlations between the predictors
@@ -343,13 +346,26 @@ dat <- dat %>% mutate(Sw_r = Sw/t) # first, get the switch rate as a permanent v
 
 ```{r, warning=FALSE, echo=FALSE}
 
-ggpairs(dat %>% select(Sw, Sw_r, TgtN, N_oc))
+ggpairs(dat %>% select(Sw, Sw_r, N_oc))
 ```
 
 All of the correlations are tolerable for subject 3. Correlations between Sw and Sw_r can be high. Might need to prefer one hypothesis over the other for the model. Will try a logistic regression model first to see.
 
 ```{r}
 
-fit <- glm(door_m ~ Sw + Sw_r + TgtN + N_oc, data=dat, family=binomial(link="logit"))
+fit <- glm(door_m ~ Sw + Sw_r + N_oc , data=dat, family=binomial(link="logit"))
 summary(fit)
 ```
+
+## Understanding correlations between regressors
+
+I am going to plot all the regressors together so I can understand how and why they are sharing so much information.
+
+```{r}
+
+grid.arrange(Sw_p, Sw_r_p, N_oc_p, nrow=2)
+```
+
+Number of switches and estimate of switch rate are correlated. The estimate goes down as there is a long delay between switches, but it is not hard to see how they track each other.
+
+Tgt N is largely tracking the same as sw_r, as in the sw_r will be determined by the number of doors occurring in between, given the dependence on trial number. So **remove TgtN from the modelling.**

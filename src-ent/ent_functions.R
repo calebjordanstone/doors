@@ -1,6 +1,7 @@
 # K. Garner, 2025, a set of functions to help with the analyses
-
+####################################################################
 ### functions to compute routine scores
+####################################################################
 H <- function(x){
   # to be applied over the rows of the matrix of transitions
   -sum(x * log(x), na.rm = TRUE)
@@ -24,7 +25,9 @@ p_st1_gs <- function(counts_matrix, n_doors){
   out
 }
 
+####################################################################
 ### functions to generate null distributions and random agents
+####################################################################
 sample_non_consec <- function(observed_data){
   # generate a null set of responses for an individual base on 
   # their observed responses
@@ -93,7 +96,9 @@ null_z_for_random_agent <- function(n_doors = 16){
   z
 }
 
+####################################################################
 ### various indexing functions to help analysis
+####################################################################
 get_context_swch_idx_per_prsn <- function(dat, subN){
   # ugly function to do the sorting/splitting of data as follows:
   ## now how to split the data up? First, by context.
@@ -149,5 +154,172 @@ counts_since_last_switch <- function(dat, subN, cntxtN){
   }
   out <- unlist(lapply(max_vals, mk_cnt_vector))
   tmp$selections_since_last_context_switch = out
+  tmp
+}
+
+####################################################################
+### functions to generate regressors for the impacts modelling
+####################################################################
+get_Sw <- function(dat, subN){
+  # this regrssor computes the number of times a target has been found in a context that is different to where the preceeding context was found, and creates a regressor as long as the responses that reflects this
+  # the logical conditions for this are:
+  # 1. is this a switch trial? yes/no - is 'switch' a 1?
+  # 2. when is the end of the switch trial (this means the target has been found)
+  #     for 2: I can get the trial numbers of each switch trial, and then find the 
+  #           last entry in the data frame that corresponds to that trial number. 
+  # 3. from sw_end + 1, the count goes up
+  #     The row after the last entry above is sw+1
+  
+  tmp <- dat %>% filter(sub == subN)
+  sw <- rep(0, nrow(tmp))
+  sw_trls <- unique(tmp$t[as.logical(tmp$switch)]) # this gives me the trial numbers where a switch occurred
+  sw_tgts_idx <- unlist(lapply(sw_trls, function(x) tail(which(tmp$t == x), 1))) 
+  cumsum = 0:length(sw_tgts_idx)
+  # add final row of dataframe to idx
+  sw_tgts_idx <- c(sw_tgts_idx, nrow(tmp))
+  rep_idx <- c(sw_tgts_idx[1], diff(sw_tgts_idx)) # now get number of times each switch should be repeated, before the next switch
+  sw <- rep(cumsum, times = rep_idx)
+  tmp$Sw <- sw
+  tmp <- tmp %>% mutate(Swr = Sw / t) # get switch rate while we are here
+  tmp
+}
+
+get_p_context <- function(dat, subN){
+  # for each trial, get the probability of being in the same context as the last rewarded trial
+  
+  tmp <- dat %>% filter(sub == subN)
+  ##############################################
+  # apply an update for each trial that reflects the probability of being in
+  # the last context in which you were rewarded
+  rw_idx <- c(with(tmp, which(diff(t) != 0)), nrow(tmp)) # get the row numbers where each trial ends, this will allow me to pull out the context for each trial
+  cntx <- with(tmp, context[rw_idx]) # get the pattern of context changes
+  # now I need to count, for each trial, what is the probability that its the same as the last trial
+  cntx_chngs <- diff(cntx) # get whether you were in the same or differeny context on the previous trial (this gives 2:end
+  cntx_chngs <- !cntx_chngs # make the stays a true, and the changes a false
+  psC <- c(.5, .5) # the probability you are in the same context as the last one you saw (pdC will be 1 - this number). p=.5 reflects uninformed priors, 2 values as the first update comes at the end of trial 2.
+  for (i in 1:(length(cntx_chngs)-1)){ # we only go to the penultimate observation as there are no updates after the last trial 
+    psC <- c(psC, sum(cntx_chngs[1:i])/i) # at the end of each trial, I evaluate the probability of a context being the same as the one I were last rewarded in. This will get fed into the next trial as the estimate of the probability of being in the same context as the last rewarded one.
+  }
+  ts <- with(tmp, unique(t))
+  tmp <- inner_join(tmp, tibble(t = ts, psC = psC, pdC = 1 - psC), by="t") 
+  
+  ####################################
+  
+  ######################################
+  # now I need for each trial, the number of n's (fails from the same context as the previous), and the number of m's (fails from the different context as the previous). A 'fail' is a selection of a task relevant door, and the failure to find a target
+  
+  # first, get the previously rewarded context
+  tmp <- inner_join(tmp, tibble(t = unique(ts), 
+                                prv_cntx = c(0, cntx[1:(length(ts)-1)])),
+                    by="t")
+  
+  # we need to assign an appropriate 'previous context' to trial 1, so lets take the context
+  # from which they first select a target door
+  cntx_a_tgts <- unique(tmp$door[tmp$context == 1 & tmp$door_cc > 0]) ## how does this not return 4 values?
+  cntx_b_tgts <- unique(tmp$door[tmp$context == 2 & tmp$door_cc > 0])
+  tgts <- matrix(c(cntx_a_tgts, cntx_b_tgts), ncol=2)
+  
+  frst_tgt_door <- tmp$door[which(tmp$door_cc == 1 | tmp$door_oc == 1)[1]]
+  prv_cntxt_4_frst_trl <- which(tgts == frst_tgt_door, arr.ind=T)[,'col']
+  tmp$prv_cntx[tmp$t == 1] = prv_cntxt_4_frst_trl
+  ## now I need to recode cc and oc responses as following:
+  ## if current context == 1 & prev context == 1, n = cc, m = oc
+  ## if current context == 1 & prev context == 2, n = oc, m = cc
+  ## if current context == 2 & prev context == 2, n = cc, m = oc
+  ## if current context == 2 & prev context == 1, n = oc, m = cc
+  tmp$door_n <- 0
+  tmp$door_m <- 0 #####NOTE: door_m is also our DV aka we are modelling responses that
+  # are from the context in which you were not just rewarded
+  tmp$door_n[tmp$context == tmp$prv_cntx] <- 
+    tmp$door_cc[tmp$context == tmp$prv_cntx]
+  # row 1 & 3, [n] from comments above
+  tmp$door_n[tmp$context != tmp$prv_cntx] <- 
+    tmp$door_oc[tmp$context != tmp$prv_cntx] # row 1 & 3 [m] from comments above. 
+  tmp$door_m[tmp$context == tmp$prv_cntx] <- # 
+    tmp$door_oc[tmp$context == tmp$prv_cntx] # row 1 & 3 [m]
+  tmp$door_m[tmp$context != tmp$prv_cntx ] <- 
+    tmp$door_cc[tmp$context != tmp$prv_cntx] # row 2 & 4 [m]
+  
+  ## now I need to add to this bit a filtering of the unique target selections on that trial, 
+  ## and remove the n's and m's which are repetitions
+  
+  remove_repeats <- function(tmp, trialN, tgts){
+    ###########
+    # here I write a function where for each trial I take the door_n selections (i.e. the relevant ones, relative to last reward). I find which of them are repetitions, and I remove those repetitions
+    ##########
+    trial_dat <- tmp %>% filter(t == trialN)
+    
+    ##########
+    # first deal with the ns
+    tgts_tn <- tgts[,trial_dat$prv_cntx[1]] # what were the n targets on this trial
+    tidx <- which(trial_dat$door_n > 0) # on which rows did someone select an n door?
+    scnd_ns_this_trl <- duplicated(trial_dat$door[tidx]) # find which selections are  repeat visits
+    # get the idx for which ones should be removed
+    trial_dat$door_frst_n <- trial_dat$door_n # establish the required variable
+    trial_dat$door_frst_n[tidx[scnd_ns_this_trl]] <- 0
+    
+    ##########
+    # now deal with the ms - code is a little clunky. I may generalise this later
+    tgts_tm <- tgts[,3-trial_dat$prv_cntx[1]]
+    midx <- which(trial_dat$door_m > 0)
+    scnd_ms_this_trl <- duplicated(trial_dat$door[midx])
+    trial_dat$door_frst_m <- trial_dat$door_m # establish the required variable
+    trial_dat$door_frst_m[midx[scnd_ms_this_trl]] <- 0
+    
+    ########## 
+    # now what we actually need to do is shift the first_n variables down 1, and put 0 in the first
+    # selection of the trial. This is because we need the regressor to reflect the update that 
+    # influences perfomance on that trial - e.g. trial 2 information affects trial 3, not trial 2
+    nr = nrow(trial_dat)
+    if (nr > 1){
+      trial_dat$door_frst_n <- c(0, trial_dat$door_frst_n[1:(nr-1)]) # because we won't update after 
+      # we've found the target
+      trial_dat$door_frst_m <- c(0, trial_dat$door_frst_m[1:(nr-1)])
+    } else {
+      trial_dat$door_frst_n <- 0
+      trial_dat$door_frst_m <- 0
+    }
+    
+    ###########
+    # return the new dataframe
+    trial_dat
+  }
+  
+  trls <- unique(tmp$t)
+  tmp <- do.call(rbind, lapply(trls, remove_repeats, tmp=tmp, tgts=tgts))
+  
+  ################################################################
+  
+  #############################################################
+  # next, remove the last door selection from each trial, as that was a hit (not a null)
+  tmp <- tmp[-rw_idx,]
+  
+  ## now by trial, compute the cumulative sum of door_n and door_m
+  tmp <- tmp %>% group_by(t) %>% mutate(sum_n = cumsum(door_frst_n),
+                                        sum_m = cumsum(door_frst_m)) 
+  #############################################################
+  
+  #############################################################
+  # next, I need a column giving the probability of n or m nulls, given you are
+  # in the previously rewarded context (for n), or the other context (for m)
+  p_vals <- c(1, .75, .5, .25, 0)
+  tmp$p_n_g_sC <- p_vals[as.factor(tmp$sum_n)] # probability of n, given you are in the same context as where you were last rewarded
+  tmp$p_m_g_dC <- p_vals[as.factor(tmp$sum_m)] # probability of m, given you are in the different context from where you were last rewarded
+  tmp$p_n_g_sC[is.na(tmp$p_n_g_sC)] <- 0
+  tmp$p_m_g_dC[is.na(tmp$p_m_g_dC)] <- 0
+  #############################################################
+  
+  #############################################################
+  ##### so what I have now on each row is the probability you are in the same context, given your 
+  ##### previous experience. I also have the number of n or m you have selected, up to the previous 
+  ##### trial
+  ##### so the info on each row reflects the information available to influence behaviour on that
+  ##### trial (i.e. the info from 1:t-1)
+  ##### so the I can compute on each trial, the probability of being in the same context given that
+  ##### many ns and ms that have been discovered up until now
+  ##### I will then substract that from 1, to get the probability you are in 
+  ##### the other context. This will help with interpretability.
+  tmp <- tmp %>% mutate(N_oc = 1-(p_n_g_sC*psC /  (p_n_g_sC*psC + p_m_g_dC*pdC)))
+  #############################################################  
   tmp
 }
