@@ -27,6 +27,7 @@ We seek to test the following hypotheses:
 3.  People learned the switch rate - i.e. the probability of oc follows n_tgt_switches / n_trials.
 4.  People learned to track the probability of a switch, given the number of targets already found in the current context. i.e. how many times before did I do X number of trials and not switch?
 5.  People track the probability of the context, given the number of non-target doors they have selected from the current context, since selection of the last target
+6.  People did the right thing and tracked p(success\|remaining in context)
 
 Note that we can ask whether these factors influenced the probability of oc responses, and the probability of nc responses, to see if the proposed process influenced the mixing of task sets, or general confusion.
 
@@ -36,10 +37,10 @@ For each subject, we can model the probability of a given response being from th
 
 $$
 \mathrm{OC_1} \sim B(n, p_i) \\
-\mathrm{log}(\frac{p_i}{1-p_i}) = \beta_0 + \beta \mathrm{Sw} + \beta \mathrm{TgtN} + \beta t_i + \beta \mathrm{N_{0|c}} + \epsilon
+\mathrm{log}(\frac{p_i}{1-p_i}) = \beta_0 + \beta \mathrm{Sw} + \beta \mathrm{Swr}  + \beta \mathrm{TgtN} + \beta \mathrm{pS} + \beta \mathrm{N_{0|c}} + \epsilon
 $$
 
-where Sw is the number of switches experienced to this point, Tgt is the number of switches that have occurred after finding that many targets (in the past), t is the number of trials, and N_0\|c is the number of non-target doors drawn from the last rewarded context on that trial.
+where Sw is the number of switches experienced to this point, Swr is the number of switches/number of trials, TgtN is the number of switches that have occurred after finding that many targets (in the past), pS is the probability of success, given the remaining doors in the context, and N_0\|c is the number of non-target doors drawn from the last rewarded context on that trial.
 
 **An oc response is defined as the number of selections from the context that you were not last rewarded from.**
 
@@ -50,7 +51,7 @@ Here I load in data from one participant, compute the regressors, and plot them 
 ```{r}
 
 # get data, and select what needed
-subN = 4
+subN = 1
 dat <- read.csv(paste('/home', id, 'Documents/projects/doors-data/data-wrangled/exp_lt_evt.csv', sep='/')) %>% 
   filter(sub == subN & ses == 2) %>% 
   select(sub, t, context, door, door_cc, door_oc, door_nc, switch)
@@ -86,7 +87,7 @@ get_Sw <- function(dat, subN){
 }
 
 dat <- get_Sw(dat, subN = subN)
-Sw_p <- dat %>% group_by(t) %>% summarise(sw = Sw[1]) %>% ggplot(aes(x=t, y=sw)) + geom_line()
+Sw_p <- dat %>% group_by(t) %>% summarise(sw = Sw[1]) %>% ggplot(aes(x=t, y=scale(sw))) + geom_line()
 ```
 
 We already have the trial number vector, so this combined with Sw will give us switch rate. Specifically:
@@ -94,7 +95,7 @@ We already have the trial number vector, so this combined with Sw will give us s
 ```{r}
 
 Sw_r_p <- dat %>% group_by(t) %>% summarise(sw = Sw[1]) %>% mutate(sr = sw/t) %>% 
-  ggplot(aes(x=t, y=sr)) + geom_line()
+  ggplot(aes(x=t, y=scale(sr))) + geom_line()
 
 ```
 
@@ -165,13 +166,15 @@ TgtN_p <- dat %>% group_by(t) %>% summarise(tgtN = TgtN[1]) %>% ggplot(aes(x=t, 
 
 ```
 
-**Last one**: People track the probability of the context, given the number of non-target doors they have selected from the current context, since selection of the last target.
+**Last ones**: People track the probability of success, given the remaining doors in the context, or they track the probability of being in the same context, given the number of non-target doors they have selected from the current context, since selection of the last target.
 
 Using Bayes theorem, we can cast the probability that you are still in $C_A$, given you have observed n and m false doors:
 
 $$P(C = A | n, m) = \frac{ P(n,m|C=A)P(C=A)}{P(n,m)}$$
 
-Here is the formula in a function (from other notes). Tis here for reference/as a reminder:
+Once we have the probability of the context (e.g. A), given n and m, we can compute the probability of success for staying in that context, and the probability of success for moving to the other context, by taking the new probability of still being in that context, and multiply that value by the probability of success, given the number of doors left in A.
+
+Here are these formulas as functions (from other notes). Tis here for reference/as a reminder:
 
 ```{r}
 
@@ -180,9 +183,18 @@ get_prob_context <- function(priors, ps_g_c, n, m){
   # note that m doesn't require definition for the first prior (nor n for the second), as p(m) given the other context is always 1, thus any number of m is implicit in the calculation
   ps_g_c[n]*priors[1]/(ps_g_c[n]*priors[1] + ps_g_c[m]*priors[2])
 }
+
+prob_success <- function(p_c, n){
+  # this function computes the probability of success, note this can be applied for either context, as long as you have the prior, and the number drawn from that context - i.e. here n could represent n or m
+  # Kwargs: p_c - numeric[1] prior for that context
+  #         n - str[1] number drawn from that context
+  p_c/(4-as.numeric(n))
+}
 ```
 
-For this, I will need the following columns of information:
+Now for both contexts, and the probabilities of success given the context, we can work out the odds that you are better off staying in A than you are switching to B, by dividing the p of A by the P of B.
+
+To compute these things, I will need the following columns of information:
 
 1.  p(context A) given experience
 2.  For each trial, the ongoing number of fails from the context for which you were last rewarded
@@ -227,6 +239,7 @@ get_p_context <- function(dat, subN){
   
   frst_tgt_door <- tmp$door[which(tmp$door_cc == 1 | tmp$door_oc == 1)[1]]
   prv_cntxt_4_frst_trl <- which(tgts == frst_tgt_door, arr.ind=T)[,'col']
+
   tmp$prv_cntx[tmp$t == 1] = prv_cntxt_4_frst_trl
   ## now I need to recode cc and oc responses as following:
   ## if current context == 1 & prev context == 1, n = cc, m = oc
@@ -323,18 +336,41 @@ get_p_context <- function(dat, subN){
   ##### trial (i.e. the info from 1:t-1)
   ##### so the I can compute on each trial, the probability of being in the same context given that
   ##### many ns and ms that have been discovered up until now
-  ##### I will then substract that from 1, to get the probability you are in 
-  ##### the other context. This will help with interpretability.
-  tmp <- tmp %>% mutate(N_oc = 1-(p_n_g_sC*psC /  (p_n_g_sC*psC + p_m_g_dC*pdC)))
-#############################################################  
+  ##### I can then subtract from 1, to get the probability that
+  ##### you are in the other context, and then divide the two 
+  ##### to get the odds ratio.
+  tmp <- tmp %>% mutate(p_Scgn = (p_n_g_sC*psC /  (p_n_g_sC*psC + p_m_g_dC*pdC)),
+                        p_Ocgn = 1 - p_Scgn)
+  # now for every situation of 1 vs 0, I am going to add a tiny amount to
+  # the 0, and subtract that from the 1, to reflect a little uncertainty
+  psC_zero_idx = which(tmp$p_Scgn == 0)
+  poC_zero_idx = which(tmp$p_Ocgn == 0)
+  uncert = .01
+  tmp$p_Scgn[c(psC_zero_idx, poC_zero_idx)] = 
+        c(tmp$p_Scgn[psC_zero_idx] + uncert, tmp$p_Scgn[poC_zero_idx] - uncert)
+  tmp$p_Ocgn[c(poC_zero_idx, psC_zero_idx)] = 
+        c(tmp$p_Ocgn[poC_zero_idx] + uncert, tmp$p_Ocgn[psC_zero_idx] - uncert)
+  
+  #### now compute the odds of being in the same context
+  tmp$cntxt_odds <- tmp$p_Scgn / tmp$p_Ocgn
+#############################################################
+  ##### now I want to work out the probability of success, given the remaining n and m, and then take the division of the 2 to get that odds ratio
+  tmp <- tmp %>% mutate(p_succss_sC = p_Scgn / (4-sum_n),
+                 p_succss_oC = p_Ocgn / (4-sum_m))
+  # replace any infs with zeros
+  tmp <- tmp %>% mutate(p_succss_sC = if_else(is.infinite(p_succss_sC), uncert, p_succss_sC),
+                        p_succss_oC = if_else(is.infinite(p_succss_oC), uncert, p_succss_oC),
+                        succss_odds = p_succss_sC / p_succss_oC)
   tmp
 }
+
 ```
 
 ```{r}
 dat <- get_p_context(dat, subN = subN)
 
-N_oc_p <- dat %>% ggplot(aes(x=t, y=N_oc)) + geom_line()
+cntx_odds_p <- dat %>% ggplot(aes(x=t, y=scale(cntxt_odds))) + geom_line()
+sccs_odds_p <- dat %>% ggplot(aes(x=t, y=scale(succss_odds))) + geom_line()
 ```
 
 Okies, now I have all the regressors, I am going to do a pairs plot to check for correlations between the predictors
@@ -346,14 +382,18 @@ dat <- dat %>% mutate(Sw_r = Sw/t) # first, get the switch rate as a permanent v
 
 ```{r, warning=FALSE, echo=FALSE}
 
-ggpairs(dat %>% select(Sw, Sw_r, N_oc))
+ggpairs(dat %>% filter(sum_m != 4) %>% select(Sw, Sw_r, cntxt_odds, succss_odds))
 ```
 
-All of the correlations are tolerable for subject 3. Correlations between Sw and Sw_r can be high. Might need to prefer one hypothesis over the other for the model. Will try a logistic regression model first to see.
+All of the correlations are tolerable for subject 1. Correlations between Sw and Sw_r can be high. Might need to prefer one hypothesis over the other for the model. Will try a logistic regression model first to see.
 
 ```{r}
 
-fit <- glm(door_m ~ Sw + Sw_r + N_oc , data=dat, family=binomial(link="logit"))
+# dat$Sw <- scale(dat$Sw)
+# dat$Sw_r <- scale(dat$Sw_r)
+# dat$cntxt_odds <- scale(dat$cntxt_odds)
+# dat$succss_odds <- scale(dat$succss_odds)
+fit <- glm(door_m ~ scale(Sw) + scale(Sw_r) + scale(succss_odds) + scale(cntxt_odds), data=dat %>% filter(sum_m != 4), family=binomial(link="logit"))
 summary(fit)
 ```
 
@@ -363,7 +403,7 @@ I am going to plot all the regressors together so I can understand how and why t
 
 ```{r}
 
-grid.arrange(Sw_p, Sw_r_p, N_oc_p, nrow=2)
+grid.arrange(Sw_p, Sw_r_p, cntx_odds_p, sccs_odds_p, nrow=2)
 ```
 
 Number of switches and estimate of switch rate are correlated. The estimate goes down as there is a long delay between switches, but it is not hard to see how they track each other.
