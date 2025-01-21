@@ -11,7 +11,7 @@ source(paste('src-ent/ent_functions.R', sep='/'))
 
 #################################################
 # load data
-exp_str <- 'lt'
+exp_str <- 'ts'
 dat <- read.csv(paste('../doors-data/data-wrangled/exp', 
                       exp_str, 'evt.csv', sep='_')) %>% 
   filter(ses == 2) %>% 
@@ -29,17 +29,20 @@ dat <- do.call(rbind, lapply(subs, get_p_context, dat=dat))
 run_logist <- function(dat, subN){
   
   tmp <- dat %>% filter(sub == subN)
-  fit <- glm(door_m ~ Sw + Swr + N_oc , data=tmp, 
+  fit <- glm(door_m ~ scale(Sw) + scale(Swr) + scale(succss_odds) + 
+               scale(cntxt_odds), 
+             data=tmp, 
              family=binomial(link="logit")) 
   coef <- fit$coefficients
   tibble(sub = subN,
          train_type = tmp$train_type[1],
          mu = coef['(Intercept)'],
-         sw = coef['Sw'],
-         swr = coef['Swr'],
-         noc = coef['N_oc'])
+         sw = coef['scale(Sw)'],
+         swr = coef['scale(Swr)'],
+         scs = coef['scale(succss_odds)'],
+         cntx = coef['scale(cntxt_odds)'])
 }
 
 betas <- do.call(rbind, lapply(subs, run_logist, dat=dat))
-write.csv(betas, paste('betas', exp_str, 'first-level.csv', sep="_"))
+write.csv(betas, paste('src-ent/betas', exp_str, 'first-level.csv', sep="_"))
 

@@ -221,6 +221,7 @@ get_p_context <- function(dat, subN){
   
   frst_tgt_door <- tmp$door[which(tmp$door_cc == 1 | tmp$door_oc == 1)[1]]
   prv_cntxt_4_frst_trl <- which(tgts == frst_tgt_door, arr.ind=T)[,'col']
+  
   tmp$prv_cntx[tmp$t == 1] = prv_cntxt_4_frst_trl
   ## now I need to recode cc and oc responses as following:
   ## if current context == 1 & prev context == 1, n = cc, m = oc
@@ -317,9 +318,23 @@ get_p_context <- function(dat, subN){
   ##### trial (i.e. the info from 1:t-1)
   ##### so the I can compute on each trial, the probability of being in the same context given that
   ##### many ns and ms that have been discovered up until now
-  ##### I will then substract that from 1, to get the probability you are in 
-  ##### the other context. This will help with interpretability.
-  tmp <- tmp %>% mutate(N_oc = 1-(p_n_g_sC*psC /  (p_n_g_sC*psC + p_m_g_dC*pdC)))
-  #############################################################  
+  ##### I can then subtract from 1, to get the probability that
+  ##### you are in the other context, and then divide the two 
+  ##### to get the odds ratio.
+  tmp <- tmp %>% mutate(p_Scgn = (p_n_g_sC*psC /  (p_n_g_sC*psC + p_m_g_dC*pdC)),
+                        p_Ocgn = 1 - p_Scgn)
+  
+  #### now compute the odds of being in the same context
+  tmp$cntxt_odds <- tmp$p_Scgn / tmp$p_Ocgn
+  #############################################################
+  ##### now I want to work out the probability of success, given the remaining n and m, and then take the division of the 2 to get that odds ratio
+  tmp <- tmp %>% mutate(p_succss_sC = p_Scgn / (4-sum_n),
+                        p_succss_oC = p_Ocgn / (4-sum_m),
+                        succss_odds = p_succss_sC/p_succss_oC)
+  # remove any infs and NAs
+  tmp <- tmp %>% filter(!is.infinite(cntxt_odds)) %>%
+    filter(!is.nan(cntxt_odds)) %>%
+    filter(!is.infinite(succss_odds)) %>%
+    filter(!is.nan(succss_odds))
   tmp
 }
