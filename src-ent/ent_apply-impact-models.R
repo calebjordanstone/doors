@@ -9,6 +9,11 @@ rm(list=ls())
 library(tidyverse)
 source(paste('src-ent/ent_functions.R', sep='/'))
 
+###################################################
+# settings
+trl_flt <- 100 # if you want to filter trials from 
+# the analysis
+
 #################################################
 # load data
 exp_str <- 'ts'
@@ -29,7 +34,7 @@ dat <- do.call(rbind, lapply(subs, get_p_context, dat=dat))
 run_logist <- function(dat, subN){
   
   tmp <- dat %>% filter(sub == subN)
-  fit <- glm(door_m ~ scale(Sw) + scale(Swr) + scale(succss_odds) + 
+  fit <- glm(door_m ~ scale(Sw) + scale(succss_odds) + 
                scale(cntxt_odds), 
              data=tmp, 
              family=binomial(link="logit")) 
@@ -38,11 +43,10 @@ run_logist <- function(dat, subN){
          train_type = tmp$train_type[1],
          mu = coef['(Intercept)'],
          sw = coef['scale(Sw)'],
-         swr = coef['scale(Swr)'],
          scs = coef['scale(succss_odds)'],
          cntx = coef['scale(cntxt_odds)'])
 }
 
-betas <- do.call(rbind, lapply(subs, run_logist, dat=dat))
+betas <- do.call(rbind, lapply(subs, run_logist, dat=dat %>% filter(t > trl_flt)))
 write.csv(betas, paste('src-ent/betas', exp_str, 'first-level.csv', sep="_"))
 

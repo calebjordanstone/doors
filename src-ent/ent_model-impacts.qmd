@@ -51,7 +51,7 @@ Here I load in data from one participant, compute the regressors, and plot them 
 ```{r}
 
 # get data, and select what needed
-subN = 1
+subN = 3
 dat <- read.csv(paste('/home', id, 'Documents/projects/doors-data/data-wrangled/exp_lt_evt.csv', sep='/')) %>% 
   filter(sub == subN & ses == 2) %>% 
   select(sub, t, context, door, door_cc, door_oc, door_nc, switch)
@@ -375,7 +375,7 @@ dat <- dat %>% mutate(Sw_r = Sw/t) # first, get the switch rate as a permanent v
 
 ```{r, warning=FALSE, echo=FALSE}
 
-ggpairs(dat %>% select(Sw, Sw_r, cntxt_odds, succss_odds))
+ggpairs(dat %>% filter(t > 100) %>% select(Sw, cntxt_odds, succss_odds))
 ```
 
 All of the correlations are tolerable for subject 1. Correlations between Sw and Sw_r can be high. Might need to prefer one hypothesis over the other for the model. Will try a logistic regression model first to see.
@@ -386,7 +386,7 @@ All of the correlations are tolerable for subject 1. Correlations between Sw and
 # dat$Sw_r <- scale(dat$Sw_r)
 # dat$cntxt_odds <- scale(dat$cntxt_odds)
 # dat$succss_odds <- scale(dat$succss_odds)
-fit <- glm(door_m ~ scale(Sw) + scale(Sw_r) + scale(succss_odds) + scale(cntxt_odds), data=dat, family=binomial(link="logit"))
+fit <- glm(door_m ~ scale(Sw) + scale(succss_odds) + scale(cntxt_odds), data=dat %>% filter(t > 100), family=binomial(link="logit"))
 summary(fit)
 ```
 
