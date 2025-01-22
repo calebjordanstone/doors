@@ -69,7 +69,6 @@ with(flt, t.test(cntx_flt, mu=0))
 
 # compare the groups
 with(flt, t.test(mu_flt ~ train_type))
-with(flt, t.test(sw_flt ~ train_type))
 with(flt, t.test(scs_flt ~ train_type))
 with(flt, t.test(cntx_flt ~ train_type))
 
