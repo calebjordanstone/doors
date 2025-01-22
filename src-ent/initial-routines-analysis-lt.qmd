@@ -26,7 +26,7 @@ exp_str = 'lt'
 
 test_dat = read.csv(file=paste("../../doors-data/data-wrangled/exp", exp_str, "avg.csv", sep="_"))
 test_dat = test_dat %>% filter(ses == 3) %>% select(sub, train_type, ses, transfer, accuracy)
-test_dat = test_dat %>% group_by(sub, train_type) %>% summarise(acc_diff = accuracy[transfer == 1] - accuracy[transfer == 2]) %>% ungroup()
+test_dat = test_dat %>% group_by(sub, train_type) %>% summarise(acc_ratio = accuracy[transfer == 1] / accuracy[transfer == 2]) %>% ungroup()
 head(test_dat)
 
 ```
@@ -36,7 +36,7 @@ Next the Maggi K4 data
 ```{r}
 
 k4_dat = read.csv(file=paste("../../doors-data/data-wrangled/exp", exp_str, "maggi-k4.csv", sep="_")) %>% select(sid, ses, transfer, k4_onset) %>% filter(ses == 3) %>%
-  group_by(sid, ses) %>% summarise(k4_diff = k4_onset[transfer == 1] - k4_onset[transfer == 2])
+  group_by(sid, ses) %>% summarise(k4_ratio = k4_onset[transfer == 1] / k4_onset[transfer == 2])
 names(k4_dat)[names(k4_dat) == "sid"] = "sub"
 head(k4_dat)
 ```
@@ -53,7 +53,7 @@ Now I'll join the data all together
 
 ```{r}
 
-all_dat <- inner_join(test_dat, k4_dat %>% select(sub, k4_diff),
+all_dat <- inner_join(test_dat, k4_dat %>% select(sub, k4_ratio),
                       by=c("sub"))
 all_dat <- inner_join(all_dat, r_dat, by="sub")
 head(all_dat)
@@ -75,7 +75,9 @@ all_dat %>% ggplot(aes(x=log(r), fill=train_type, group=train_type)) + geom_dens
 with(all_dat, t.test(log(r) ~ train_type))
 ```
 
-This seems pretty sensible. Now I'll just do a qqplot to see how skewed the measures are.
+This seems pretty sensible. Now I want to assess whether the measure of routine predicts the accuracy or k4 difference.
+
+I'll just do a qqplot to see how skewed the measures are.
 
 **First the measure of routine**
 
@@ -96,48 +98,71 @@ That improves things a lot. Will keep the r measure logged.
 **Now the DVs**
 
 ```{r}
-all_dat %>% ggplot(aes(sample=acc_diff)) + stat_qq() + stat_qq_line()
+all_dat %>% ggplot(aes(sample=acc_ratio)) + stat_qq() + stat_qq_line()
 ```
+
+Eech! That measure will need some work
 
 ```{r}
 
-all_dat %>% ggplot(aes(sample=k4_diff)) + stat_qq() + stat_qq_line()
+all_dat %>% ggplot(aes(sample=k4_ratio)) + stat_qq() + stat_qq_line()
 ```
 
+Okies, its clear we need to log transform the accuracy and k4 measures
+
 ```{r}
+# first, aremove anyone who got a k4 diff of 0, as this means one of our estimates for them was infinity
+all_dat$k4_ratio[!all_dat$k4_ratio] <- NA
+all_dat$k4_ratio[is.infinite(all_dat$k4_ratio)] <- NA
 all_dat <- all_dat %>% mutate(log_r=log(r),
-                              log_acc_diff=log(acc_diff_4log))
+                              log_acc=log(acc_ratio),
+                              log_k4=log(k4_ratio))
 head(all_dat)
+```
+
+Plot the new variables to make sure they look ok
+
+```{r}
+all_dat %>% ggplot(aes(sample=log_acc)) + stat_qq() + stat_qq_line()
+```
+
+Euw. Still not amazing, but we can go spearmans if needs be
+
+```{r}
+
+all_dat %>% ggplot(aes(sample=log_k4)) + stat_qq() + stat_qq_line()
+```
+
+Ah, much better.
+
+Okies, now remove outliers \> or \< 3 \* sds from the mean
+
+```{r}
+
+all_dat <- all_dat %>% na.omit()
+cutoffs <- all_dat %>% summarise(mu_lr = mean(log_r),
+                      sd_lr = sd(log_r),
+                      mu_la = mean(log_acc),
+                      sd_la = sd(log_acc),
+                      mu_lk4 = mean(log_k4),
+                      sd_lk4 = sd(log_k4))
+
+all_dat <- all_dat %>% mutate(log_r = if_else(log_r < cutoffs$mu_lr + 3*cutoffs$sd_lr &
+                                    log_r > cutoffs$mu_lr - 3*cutoffs$sd_lr, log_r, NA),
+                   log_acc = if_else(log_acc < cutoffs$mu_la + 3*cutoffs$sd_la &
+                                    log_acc > cutoffs$mu_la - 3*cutoffs$sd_la, log_acc, NA),
+                   log_k4 = if_else(log_k4 < cutoffs$mu_lk4 + 3*cutoffs$sd_lk4 &
+                                    log_k4 > cutoffs$mu_lk4 - 3*cutoffs$sd_lk4, log_k4, NA),)
+
+all_dat <- all_dat %>% na.omit()
 ```
 
 ## Does routine formation predict differences between the learning transfer conditions?
 
-First, lets look at accuracy differences
+Lets do the pairs plot:
 
 ```{r}
 
-summary(lm(acc_diff ~ train_type + log_r, data = all_dat))
-```
-
-```{r}
-
-all_dat %>% ggplot(aes(x=log_r, y=acc_diff, group=train_type, colour=train_type)) +
-  geom_point()
-```
-
-Now lets look at the K4 difference
-
-```{r}
-
-idx <- is.infinite(all_dat$k4_diff) | is.nan(all_dat$k4_diff) 
-k4_dat <- all_dat[!idx, ]
-
-k4_dat %>% ggplot(aes(x=log_r, y=k4_diff, group=train_type, colour=train_type)) +
-  geom_point()
-```
-
-```{r}
-
-summary(lm(k4_diff ~ train_type + log_r, data = k4_dat))
-
+ggpairs(all_dat %>% select(train_type, log_r, log_acc, log_k4),
+        mapping=ggplot2::aes(colour = all_dat$train_type))
 ```
