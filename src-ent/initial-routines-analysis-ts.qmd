@@ -204,5 +204,5 @@ Lets do the pairs plot:
 
 ggpairs(all_dat %>% select(train_type, log_r, log_acc, log_sst, log_ssl, log_rt),
         mapping=ggplot2::aes(colour = all_dat$train_type),
-        method="spearman")
+        upper = list(continuous = wrap("cor", method = "spearman")))
 ```
