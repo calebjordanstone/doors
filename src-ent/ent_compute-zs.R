@@ -6,13 +6,12 @@
 
 rm(list=ls())
 library(tidyverse)
-exp_str = "lt"
+exp_str = "ts"
 
 ################################################################
 # load data
 dat <- read.csv(file=paste("../doors-data/data-wrangled/exp", exp_str, 
                           "rnulls.csv", sep="_"))
-
 ###############################################################
 # for each participant and context, compute z-scores
 zdat <- dat %>% group_by(sub, context) %>% summarise(r = r[1],
@@ -32,15 +31,30 @@ rm(tmp)
 ###############################################################
 # now test the z-scores against the null of 0 - do the z-scores
 # likely contain no effect
-zdat %>% ggplot(aes(x=z, colour=as.factor(train_type), 
+zdat <- zdat %>% group_by(sub, train_type) %>% summarise(mu_z = mean(z))
+
+zdat %>% ggplot(aes(x=mu_z, colour=as.factor(train_type), 
                     fill=as.factor(train_type), group=as.factor(train_type))) +
-  geom_histogram(alpha=0.5) + xlim(-300, 10) + facet_wrap(~context)
+  geom_histogram(alpha=0.5) + xlim(-300, 10) 
 
-###############################################################
-# now test the z-scores against zero
-t.test(zdat$z[zdat$context == 1], mu=0, alternative="less")
-t.test(zdat$z[zdat$context == 2], mu=0, alternative="less")
+## looks like some outliers so will remove + or - 3 sdevs
+zsum <- zdat %>% ungroup() %>% reframe(gmu=mean(mu_z), gsd=sd(mu_z))
+zdat <- cbind(zdat, zsum)
+zdat_cl <- zdat %>% mutate(mu_z = if_else(mu_z < gmu + 3*gsd & 
+                                 mu_z > gmu - 3*gsd, mu_z, NA)) %>%
+                        na.omit() 
+# lost 3 observations
+# save this data file for plotting
+write.csv(zdat_cl, file=paste("../doors-data/data-wrangled/exp", 
+                              exp_str,
+                              "zs_cl.csv", sep="_"))
+
+# now test the z-scores against zero and save results to a csv file
+null0 <- t.test(zdat_cl$mu_z, mu=0, alternative="less")
+
 # and against -2
-t.test(zdat$z[zdat$context == 1], mu=-2, alternative="less")
-t.test(zdat$z[zdat$context == 2], mu=-2, alternative="less")
-
+null2 <- t.test(zdat_cl$mu_z, mu=-2, alternative="less")
+z_t_stats <- do.call(rbind, lapply(list(null0, null2), function(x) unlist(x)))
+write.csv(z_t_stats, file=paste("../doors-data/data-wrangled/exp", 
+                                exp_str,
+                                "zs_cl_inf-test.csv", sep="_"))

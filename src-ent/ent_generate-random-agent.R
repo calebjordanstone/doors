@@ -19,10 +19,10 @@ zs <- replicate(n_samples, null_z_for_random_agent())
 
 #######################################################################
 # save results
-save(zs, file="src-ent/random-agent_z-score-analysis.Rds")
+save(zs, file="doors-data/sims/random-agent_z-score-analysis.Rds")
 
 #######################################################################
 # plot histogram
-pdf(file="src-ent/random-agent_z-score-null.pdf")
+pdf(file="doors-data/sims/random-agent_z-score-null.pdf")
 hist(zs)
 dev.off()
