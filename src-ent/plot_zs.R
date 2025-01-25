@@ -29,16 +29,31 @@ load(paste(fstem, 'sims/random-agent_z-score-analysis.Rds', sep=""))
 
 ###########################################################
 # plot histograms
+##########################################################
+# for manuscripts
 pdf(paste(fstem, 'figs/z-hsts.pdf', sep=""), 
-          width = p_wdth/2.54, height = p_hgt/2.54)
+          width = p_wdth/2.54, height = p_hgt/2.54) 
+par(mfrow = c(1,2), mar = c(4, 4, 2, 1), las=2, cex=2/3)
 
-par(mfrow=c(1,2), mar = c(4, 4, 2, 1))
+
+##########################################################
+# for talks
+pdf(paste(fstem, 'figs/z-hsts_talk.pdf', sep=""), # for talks
+          width = p_wdth/2.54*2.5, height = p_hgt/2.54*2.5)
+par(mfrow = c(1,2), mar = c(4, 4, 2, 1), las=2, cex=1.5)
+
+##########################################################
 hist(with(zdat, mu_z[exp == exp_strs[1]]), 
      probability=TRUE,
      col = col_scheme[exp_strs[1]], 
      xlim = c(min(zdat$mu_z), max(zs)),
+     ylim = c(0,0.08),
      xlab = "z", ylab = "freq",
-     main="")
+     main = "humans",
+     xaxt = "n",
+     yaxt = "n")
+axis(1, at = seq(-100, 0, by = 50))
+axis(2, at = seq(0, 0.08, by = 0.04))
 hist(with(zdat, mu_z[exp == exp_strs[2]]), probability=TRUE, 
      col=col_scheme[exp_strs[2]], add=T)
 # add legend
@@ -46,6 +61,10 @@ hist(with(zdat, mu_z[exp == exp_strs[2]]), probability=TRUE,
 hist(zs, probability = TRUE,
      col = col_scheme["agent"],
      xlim = c(min(zdat$mu_z), max(zs)),
-     xlab = "z", ylab = "freq",
-     main="")
+     xlab = "z", ylab = "",
+     main="random agent",
+     xaxt = "n",
+     yaxt = "n")
+axis(1, at = seq(-100, 0, by = 50))
+axis(2, at = seq(0, 0.4, by = 0.2))
 dev.off()
