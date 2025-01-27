@@ -1,50 +1,50 @@
 ######################################################################
-## K. Garner (2025) - use initially wrangled data to compute transition
-## matrices and entropy scores
+## K. Garner (2025) - plot rs, p(o-context modelling, and betas)
 ######################################################################
 
 rm(list=ls())
 library(tidyverse)
+library(vioplot)
 
-str <- 'lt' ## experiment to get scores for
+# stuff you need and settings
+exp_strs <- c('lt', 'ts')
+fstem <- '../doors-data/'
+col_scheme <- c('#a6cee3','#1f78b4')
+names(col_scheme) <- c(exp_strs)
+col_scheme <- unlist(lapply(col_scheme, adjustcolor, alpha.f=0.5))
 
-######################################################################
-## functions
-######################################################################
-source("src-ent/ent_functions.R")
+p_wdth <- 10 # plot width, in cm
+p_hgt <- 6
 
-######################################################################
-## load data
-######################################################################
-dat <- read.csv(paste("../doors-data/data-wrangled/exp", str, 
-                          "door_selections_for_ent.csv", sep="_"))
+###########################################################
+# load r data from each exp
+rdat <- do.call(rbind, lapply(exp_strs, function(x) {
+  # get r scores
+  dat <- read.csv(file=paste(fstem, 'data-wrangled/', 'exp_', x, '_rscore.csv', sep=""))
+  dat$exp <- x
+  # add training group
+  dat <- inner_join(dat, read.csv(file=paste(fstem, 'data-wrangled/', 'exp_', x, '_avg.csv', sep="")) %>% 
+                      filter(ses == 2) %>% select(sub, train_type) %>% distinct(),
+                    by="sub")
+  dat
+}))
 
-### compute entropy score/routine measure for each subject
-subs <- unique(dat$sub)
-cntxts <- unique(dat$context_assign_ent)
-subs <- rep(subs, times=length(cntxts))
-cntxts <- rep(cntxts, each = max(subs))
 
-compute_ent_by_sub <- function(subN, cntxN, dat, n_doors = 16){
-  # compute routine score and create a mini tibble for a given subject
-  # and context
-    tmp <- dat %>% filter(sub == subN & context_assign_ent == cntxN)
-    door_dat <- tmp$door
-    count_mat <- data_2_counts_matrix(data = door_dat, n_doors)
-    probs <- p_st1_gs(counts_matrix = count_mat, n_doors = n_doors)
-    ent <- sum(apply(probs, 1, H))
-    tibble(sub = subN, context = cntxN, r = ent)
-}
 
-r_dat <- do.call(rbind, mapply(compute_ent_by_sub, subs, cntxts, MoreArgs = list(dat=dat),
-            SIMPLIFY = FALSE))
-write.csv(r_dat, file=paste("../doors-data/data-wrangled/exp", str, 
-                            "rscore-full.csv", sep="_"),
-          row.names=FALSE)
 
-plot(x=r_dat$r[r_dat$context == 1], y=r_dat$r[r_dat$context == 2]) # very similar so will average
-r_dat <- r_dat %>% group_by(sub) %>% summarise(r = mean(r)) %>% ungroup()
+###########################################################
+# plot the data by group and experiment
+par(mfrow=c(2,2), las=2)
+with(rdat, vioplot(r[exp == exp_strs[[1]] & train_type == 1],
+                   r[exp == exp_strs[[1]] & train_type == 2],
+     col=col_scheme, names=c("S", "V"),
+     axes=F, ylim=c(0,35),
+     yaxt='n',
+     ylab='freq',
+     xlab='r'))
+axis(2, at = seq(0, 35, by = 15))
 
-write.csv(r_dat, file=paste("../doors-data/data-wrangled/exp", str, 
-                               "rscore.csv", sep="_"),
-          row.names=FALSE)
+with(rdat, vioplot(r[exp == exp_strs[[2]] & train_type == 1],
+                   r[exp == exp_strs[[2]] & train_type == 2],
+                   col=col_scheme, names=c("S", "V"),
+                   axes=F, ylim=c(0,35)))
