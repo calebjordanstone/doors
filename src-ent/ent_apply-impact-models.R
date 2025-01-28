@@ -13,12 +13,14 @@ source(paste('src-ent/ent_functions.R', sep='/'))
 # settings
 trl_flt <- 100 # if you want to filter trials from 
 # the analysis
+fstm <- '../doors-data/data-wrangled/' # where will you get
+# data from (and save it to)
+exp_str <- 'ts' # which experiment to analyse
 
 #################################################
 # load data
-exp_str <- 'ts'
-dat <- read.csv(paste('../doors-data/data-wrangled/exp', 
-                      exp_str, 'evt.csv', sep='_')) %>% 
+dat <- read.csv(paste(fstm, 'exp_', 
+                      exp_str, '_evt.csv', sep='')) %>% 
   filter(ses == 2) %>% 
   select(sub, train_type, t, context, door, door_cc, door_oc, door_nc, switch)
 
@@ -48,5 +50,5 @@ run_logist <- function(dat, subN){
 }
 
 betas <- do.call(rbind, lapply(subs, run_logist, dat=dat %>% filter(t > trl_flt)))
-write.csv(betas, paste('src-ent/betas', exp_str, 'first-level.csv', sep="_"))
+write.csv(betas, paste(fstm, 'exp_', exp_str, '_betas-first-level.csv', sep=""))
 

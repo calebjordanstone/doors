@@ -18,7 +18,7 @@ The goal is to develop a metric that quantifies how routine people are on the do
 
 i\) be rank ordering - we agree that the metric quantifies the strength of what we consider to be a routine
 
-ii\) be testable against chance
+ii\) be testable against chance (more on this in another document)
 
 ## Simulating people
 
@@ -237,106 +237,3 @@ The randomness noise added to P7 and P8 has wound up in them leaving states in a
 ### Interim Summary
 
 This seems like not a bad definition and measurement of routines to me. From this perspective, you are more routine if you enter states consistently. If you enter a state from multiple preceding states, or you vary in how you enter multiple states you are quantified as less routine. If you start behaving randomly, then your routine score is impacted by where you can be random from.
-
-## Statistical testing against chance
-
-My plan for statistical testing against chance is the following:
-
-For each participant, take their set of responses and shuffle them, compute $R$ over 1000 iterations. This will give a null distribution of their $R$ scores, given that they were performing their selections randomly. I am going to compute this for each person to see what I get:
-
-**Note for discussion - should I constrain the random sampling in any way? e.g. no returnsies to the same location?**
-
-```{r, message = false}
-
-observed_sequences <- lapply(peeps, generate_data, n=360)
-
-# as we don't count returnsies in the task, and they are highly unlikely, I am going to constrain the generation of the null distribution so that self to self transitions are not allowed. This feels fairer:
-sample_non_consec <- function(observed_data){
-  
-  n = length(observed_data) # this is the length of the sequence we will generate
-  out = rep(0, times=n)
-  out[1] <- sample(observed_data, 1)
-  values <- unique(observed_data)
-  for (i in 2:length(out)){
-    poss_values <- setdiff(values, out[i - 1])
-    out[i] <- sample(poss_values, 1)
-  }
-  out
-}
-
-generate_null_for_one_person <- function(observed_data, n_samples = 1000, n_doors = 16){
-  
-  null_seqs <- replicate(n_samples, sample_non_consec(observed_data), simplify=FALSE)
-  null_counts <- lapply(null_seqs, data_2_counts_matrix, n_doors = n_doors)
-  null_ps <- lapply(null_counts, p_st1_gs, n_doors = n_doors)
-  null_Rs <- apply(do.call(rbind, lapply(null_ps, function(x) apply(x, 1, H))), 1, sum)
-  null_Rs
-}
-
-null_Rs <- lapply(observed_sequences, generate_null_for_one_person, n_samples = 1000, n_doors = 16)
-
-lapply(1:length(null_Rs), function(x) hist(null_Rs[[x]], main = names(null_Rs)[x],
-                                           xlab = "null Rs"))
-
-```
-
-This suggests to me that the nulls calculated this way vary from slightly positively skewed to normal.
-
-What we can do next is subtract each subject's observed R from each observation in their null R. Obviously, the made up subs had very low R scores. Let's plot it to see what it looks like.
-
-```{r}
-
-null_obs_diffs <- function(x,y){
-  y - x
-}
-null_diffs <- mapply(null_obs_diffs, p_dat, null_Rs, SIMPLIFY = FALSE)
-
-lapply(1:length(null_diffs), function(x) hist(null_diffs[[x]], main = names(null_diffs)[x],
-                                             xlab = "null Diffs"))
-```
-
-Okies, so I think what we can say here, is that in the case of routines, we expect the distribution of differences to be normal, with a particular variance, with an offset on the mean value for each participant. We can therefore use a mixed effects model, to ask whether the group level disribution of differences is likely to cover zero?
-
-First, lets quickly generate some actual random data and check we get null distributions around zero.
-
-```{r, message = FALSE}
-
-random_folks <- lapply(observed_sequences, sample_non_consec)
-
-rf_mats <- lapply(random_folks, data_2_counts_matrix, n_doors = 16)
-rf_probs <- lapply(rf_mats, p_st1_gs, n_doors = 16)
-rf_Rs <- apply(do.call(rbind, lapply(rf_probs, function(x) apply(x, 1, H))), 1, sum)
-
-rf_diffs <- mapply(null_obs_diffs, rf_Rs, null_Rs, SIMPLIFY = FALSE)
-lapply(1:length(rf_diffs), function(x) hist(rf_diffs[[x]], main = names(rf_diffs)[x],
-                                             xlab = "random folks Diffs"))
-```
-
-Okies, happy enough for now. Now I'll construct the dataframe for the mixed effects model. Going to use BRMS for a quick initial modelling -
-
-fit \<- brm(diffs \~ 1\|sub,
-
-data = dat,
-
-family = gaussian)
-
-```{r}
-
-dat <- do.call(rbind, lapply(1:length(null_diffs), function(x) data_frame(sub = names(null_diffs[x]),
-                                                         diffs = null_diffs[[x]])))
-dat$subject <- as.integer(gsub("P", "", dat$sub))
-## here is a simple model where I don't assume any hierarchical structure
-
-data <- list("y" = dat$diffs, 
-             "n" = length(dat$diffs),
-             "N" = length(unique(dat$sub)),
-             "subs" = dat$subject)
-
-##### set up the model
-model <- stan_model("/home/kgarner/Documents/projects/doors/src-ent/model-files/hierarchical_normal_simple.stan")
-fit <- sampling(model, data, iter=2000, chains=4)
-```
-
-```{r}
-traceplot(fit)
-```
