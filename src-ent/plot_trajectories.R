@@ -61,6 +61,7 @@ draw_trajectory <- function(dat, cntxt, xs, ys, obs){
                aes(x = xs,
                    y = ys,
                    colour = tgt), size = 4, alpha = .3) +
+    scale_colour_manual(values=c("#fa9fb5", "#4dd0a9ff" ,"#a7a2e5ff")) + 
     theme(axis.title.x=element_blank(),
           axis.text.x=element_blank(),
           axis.ticks.x=element_blank()) +
@@ -76,12 +77,11 @@ draw_trajectory <- function(dat, cntxt, xs, ys, obs){
 #########
 # first filter the data for the second session and pick some subjects
 ############
-subs <- c(1, 10, 61, 64)
 ses_dat <- all_dat %>% filter(ses == 2)
 cntx = 1
 
 # change sub 1 arrows so that they are all going the right way
-sub1_idxs <- list(c(179:183), c(247:251), c(400:404), c(514:518), c(890:894))
+sub1_idxs <- list(c(175:179), c(247:251), c(398:402), c(511:515), c(889:893))
 sub1_ps <- lapply(sub1_idxs, draw_trajectory, 
                     dat = ses_dat %>% filter(sub == 1),
                     xs = xs, ys=ys, cntxt = cntx)
