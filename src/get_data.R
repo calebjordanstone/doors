@@ -1,14 +1,14 @@
-get_data <- function(data_path, exp, sub, ses, train_type, train_doors) {
+get_data <- function(data_path, sub, ses, train_type, train_doors) {
   # reads in trial info and sample data from 'trls' and 'beh' files and formats into a
   # one-row-per-trial data frame
 
-  if (version == "pilot-data-00" || version == "pilot-data-01" || ses != "ses-learn") {
+  if (ses != "ses-learn") {
     success <- c()
-    success <- rbind(success, file.exists(file.path(data_path, exp, sub, ses, "beh", paste(sub, ses,
+    success <- rbind(success, file.exists(file.path(data_path, sub, ses, "beh", paste(sub, ses,
       "task-mforage_trls.tsv",
       sep = "_"
     ))))
-    success <- rbind(success, file.exists(file.path(data_path, exp, sub, ses, "beh", paste(sub, ses,
+    success <- rbind(success, file.exists(file.path(data_path, sub, ses, "beh", paste(sub, ses,
       "task-mforage_beh.tsv",
       sep = "_"
     ))))
@@ -16,11 +16,11 @@ get_data <- function(data_path, exp, sub, ses, train_type, train_doors) {
     haus <- c("house-1", "house-2")
     success <- c()
     for (h in haus) {
-      success <- rbind(success, file.exists(file.path(data_path, exp, sub, ses, "beh", paste(sub,
+      success <- rbind(success, file.exists(file.path(data_path, sub, ses, "beh", paste(sub,
         ses, h, "task-mforage_trls.tsv",
         sep = "_"
       ))))
-      success <- rbind(success, file.exists(file.path(data_path, exp, sub, ses, "beh", paste(sub,
+      success <- rbind(success, file.exists(file.path(data_path, sub, ses, "beh", paste(sub,
         ses, h, "task-mforage_beh.tsv",
         sep = "_"
       ))))
@@ -28,32 +28,32 @@ get_data <- function(data_path, exp, sub, ses, train_type, train_doors) {
   }
 
   if (all(success)) {
-    if (version == "pilot-data-00" || version == "pilot-data-01" || ses != "ses-learn") {
-      trials <- read.table(file.path(data_path, exp, sub, ses, "beh", paste(sub, ses, "task-mforage_trls.tsv",
+    if (ses != "ses-learn") {
+      trials <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_trls.tsv",
         sep = "_"
       )), header = TRUE)
-      resps <- read.table(file.path(data_path, exp, sub, ses, "beh", paste(sub, ses, "task-mforage_beh.tsv",
+      resps <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_beh.tsv",
         sep = "_"
       )), header = TRUE)
     } else {
-      trials <- read.table(file.path(data_path, exp, sub, ses, "beh", paste(sub, ses, "house-1",
+      trials <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-1",
         "task-mforage_trls.tsv",
         sep = "_"
       )), header = TRUE)
-      trials <- rbind(trials, read.table(file.path(data_path, exp, sub, ses, "beh", paste(sub,
+      trials <- rbind(trials, read.table(file.path(data_path, sub, ses, "beh", paste(sub,
         ses, "house-2", "task-mforage_trls.tsv",
         sep = "_"
       )), header = TRUE))
 
-      resps_1 <- read.table(file.path(data_path, exp, sub, ses, "beh", paste(sub, ses, "house-1",
+      resps_1 <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-1",
         "task-mforage_beh.tsv",
         sep = "_"
       )), header = TRUE)
-      resps_2 <- read.table(file.path(data_path, exp, sub, ses, "beh", paste(sub, ses, "house-2",
+      resps_2 <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-2",
         "task-mforage_beh.tsv",
         sep = "_"
       )), header = TRUE)
-      resps_3 <- read.table(file.path(data_path, exp, sub, ses, "beh", paste(sub, ses, "house-9",
+      resps_3 <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-9",
         "task-mforage_beh.tsv",
         sep = "_"
       )), header = TRUE)
@@ -83,16 +83,16 @@ get_data <- function(data_path, exp, sub, ses, train_type, train_doors) {
     resps <- resps %>%
       rename(context = cond) %>%
       mutate(door_cc = case_when(door_p > 0 ~ 1, door_p == 0 ~ 0, .default = 0))
-    if (ses == "ses-learn") {
-      resps <- resps %>%
-        rename(ses = learn)
-    } else if (ses == "ses-train") {
-      resps <- resps %>%
-        rename(ses = train)
-    } else {
-      resps <- resps %>%
-        rename(ses = test)
-    }
+    # if (ses == "ses-learn") {
+    #   resps <- resps %>%
+    #     rename(ses = learn)
+    # } else if (ses == "ses-train") {
+    #   resps <- resps %>%
+    #     rename(ses = train)
+    # } else {
+    #   resps <- resps %>%
+    #     rename(ses = test)
+    # }
 
     ### find the important events
     resps <- resps %>%
@@ -106,7 +106,7 @@ get_data <- function(data_path, exp, sub, ses, train_type, train_doors) {
       mutate(off = case_when(!is.na(off) ~ off, is.na(off) ~ c(on[2:length(on)], NA), .default = NA)) # if two onsets occured back-to-back, use the second onset as the first offset
     trials <- unique(resps$t)
     resps <- resps %>%
-      mutate(subses = case_when(t %in% trials[1:round(length(trials) / 2)] ~ 1, .default = 2), .after=ses)
+      mutate(subses = case_when(t %in% trials[1:round(length(trials) / 2)] ~ 1, .default = 2), .after=str_split_i(ses, '-', 2))
 
     ### code door by whether it's part of current context, other context, or no context
     doors <- resps %>%

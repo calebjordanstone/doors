@@ -4,6 +4,7 @@
 ### sources
 library(tidyverse)
 library(zeallot) #unpack/destructure with %<-%
+library(stringr)
 
 source(file.path("src", "get_subs.R"))
 source(file.path("src", "get_switch.R"))
@@ -16,8 +17,8 @@ source(file.path("src","get_learned_doors.R"))
 
 # !you will want to update these settings a lot during piloting, when the task code or the way you
 # test changes, or when you test participants on different subsets of the task phases
-version <- "study-01" # pilot-data-00 (train and test), pilot-data-01 (learn and train), pilot-data-02 (learn and train, learn phase split into two parts)
-exp <- "exp_ts" # experiment: 'exp_ts' (task-switching) or 'exp_lt' (learning transfer)
+version <- "pilot-data" # # pilot-data-00 (train and test), pilot-data-01 (learn and train), pilot-data-02 (learn and train, learn phase split into two parts), pilot-data-03 (lean, train, test, 2025)
+exp <- "flexibility" # or "multitasking
 sess <- c("ses-learn","ses-train","ses-test") # session: 'ses-learn','ses-train','ses-test'. can select one (e.g. ses <- c('ses-learn')) or multiple (e.g. ses <- c('ses-train','ses-test'))
 
 ### paths
@@ -32,13 +33,18 @@ if (!dir.exists(file.path(project_path, "res"))) {
 
 # !you will need to change the data path to match the location of OneDrive on your personal
 # computer
-data_path <- file.path("/Users/lydiabarnes/OneDrive - UNSW/task switch and transfer/data-sandpit", version)
+file_path <- "C:/Users/cstone/OneDrive - UNSW/Documents/Projects/honours_projects/data"
+exp_path <- str_glue("/{exp}/{version}")
+data_path <- file.path(file_path + exp_path)
+
 if (!dir.exists(data_path)) {
   stop(paste0(data_path, " does not exist"))
 }
 
 ### load an up-to-date list of participants
-subs <- get_subs(exp, version)
+ses = sess[3] # update sess to be learn [1], train [2] or test [3]
+files <- list.files(data_path, pattern = str_glue('*({ses}).*(beh.tsv)'), recursive = T) 
+subs <- unique(str_split_i(files, "/", 1))
 
 ### extract events from the raw data
 
@@ -60,28 +66,29 @@ for (sub in subs) {
     train_type <- NA
     context_one_doors <- NA
     
-    if (exp=="exp_lt" && sub=="sub-64" && ses=="ses-learn"){
-     print("skipping missing data") 
-    }else{
+    # if (exp=="exp_lt" && sub=="sub-64" && ses=="ses-learn"){
+    #  print("skipping missing data") 
+    # }else{
+    #
+    
+    if (ses == "ses-test") {
+      train_type <- grp_data %>%
+        filter(sub == sid, ses == 2) %>%
+        select(train_type) %>% 
+        unique() %>% 
+        pull()
+      train_doors <- grp_data %>% 
+        filter(sub==sid,ses==ses,door_cc==1) %>% 
+        select(door,context) %>% 
+        unique()
+    }
       
-      if (ses == "ses-test") {
-        train_type <- grp_data %>%
-          filter(sub == sid, ses == 2) %>%
-          select(train_type) %>% 
-          unique() %>% 
-          pull()
-        train_doors <- grp_data %>% 
-          filter(sub==sid,ses==ses,door_cc==1) %>% 
-          select(door,context) %>% 
-          unique()
-      }
-      
-      data <- get_data(data_path, exp, sub, ses, train_type, train_doors) # load and format raw data
+      data <- get_data(data_path, sub, ses, train_type, train_doors) # load and format raw data
       grp_data <- rbind(grp_data, data) # add to the 'grp_data' data frame so we end up with all subjects and sessions in one spreadsheet
       
     }
   }
-}
+# }
 
 # track whether context-incorrect clicks in the test phase land on doors that were learned in the train phase
 if(exp=="exp_lt"){
