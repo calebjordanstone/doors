@@ -42,8 +42,7 @@ if (!dir.exists(data_path)) {
 }
 
 ### load an up-to-date list of participants
-ses = sess[3] # update sess to be learn [1], train [2] or test [3]
-files <- list.files(data_path, pattern = str_glue('*({ses}).*(beh.tsv)'), recursive = T) 
+files <- list.files(data_path, pattern = str_glue('.*(beh.tsv)'), recursive = T) 
 subs <- unique(str_split_i(files, "/", 1))
 
 ### extract events from the raw data
@@ -56,21 +55,21 @@ grp_data <- data.frame(
   original_house = integer()
 )
 
+grp_ons <- data.frame(
+  sub = integer(), ses = integer(), t = integer(), context = integer(), on = integer()
+)
+
 # for each subject and session, use the function 'get_data' to load their raw data and attach it to
 # our 'grp_data' data frame with one measurement (row) per event (click or hover)
 for (sub in subs) {
   print(sub)
   
   sid <- as.numeric(substring(sub,5,7))
-  for (ses in sess) {
+  for (ses in sess) { 
     train_type <- NA
     context_one_doors <- NA
-    
-    # if (exp=="exp_lt" && sub=="sub-64" && ses=="ses-learn"){
-    #  print("skipping missing data") 
-    # }else{
-    #
-    
+    train_doors <- NA # ???
+  
     if (ses == "ses-test") {
       train_type <- grp_data %>%
         filter(sub == sid, ses == 2) %>%
@@ -84,11 +83,10 @@ for (sub in subs) {
     }
       
       data <- get_data(data_path, sub, ses, train_type, train_doors) # load and format raw data
-      grp_data <- rbind(grp_data, data) # add to the 'grp_data' data frame so we end up with all subjects and sessions in one spreadsheet
-      
+      grp_data <- rbind(grp_data, data$resps) # add to the 'grp_data' data frame so we end up with all subjects and sessions in one spreadsheet
+      grp_ons <- rbind(grp_ons, data$ons)
     }
   }
-# }
 
 # track whether context-incorrect clicks in the test phase land on doors that were learned in the train phase
 if(exp=="exp_lt"){
@@ -102,7 +100,7 @@ grp_data <- get_setting_stability(grp_data) # track when they changed context in
 grp_data <- grp_data %>% mutate(door_nc = case_when(door_cc==1 ~ 0, door_oc == 1 ~ 0, .default=1), .after="door_oc")
 
 # save the formatted data
-fnl <- file.path(project_path, "res", paste(paste(exp, "evt", sep = "_"), ".csv", sep = ""))
+fnl <- file.path(project_path, "res", paste(paste(sub, exp, "evt", sep = "_"), ".csv", sep = ""))
 write_csv(grp_data, fnl)
 
 ### extract accuracy and response time averages from event data
@@ -122,10 +120,10 @@ res <- grp_data %>%
 )
 
 # re-label exp_lt test phase "switch" trials as stay trials
-if (exp == "exp_lt"){
-  res <- res %>% 
-    mutate(switch = case_when(switch==1 & ses==3 ~ 0, .default = switch))
-}
+# if (exp == "exp_lt"){
+#   res <- res %>% 
+#     mutate(switch = case_when(switch==1 & ses==3 ~ 0, .default = switch))
+# }
 
 # calculate context change rates
 res$context_changes[intersect(which(res$switch==1),which(res$ses==2))] <- res$context_changes[intersect(which(res$switch==1),which(res$ses==2))]-1
@@ -133,7 +131,8 @@ rt <- grp_data %>%
   group_by(sub, ses, subses, t, context, train_type, transfer) %>%
   filter(door_cc == 1) %>%
   summarise(rt = min(off)) # time to first correct click offset
-res$rt <- rt$rt
+rt <- inner_join(grp_ons, rt, by=c('sub', 'ses', 't', 'context'))
+res$rt <- rt$rt - rt$on
 res$win <- 4-res$n_clicks >= 0
 
 # make sure we can select just the first-click-correct trials to calculate avg rt over trials
@@ -148,7 +147,7 @@ res <- res %>%
   mutate(rt_correct = case_when(first_click_correct == 1 ~ rt))
 
 # trim RTs
-if (exp=="exp_ts"){
+if (exp=="flexibility"){
   res <- res %>% filter(rt<=10) %>% ungroup() %>% group_by(ses,context,switch) %>% filter(rt<=(mean(rt)+(3*sd(rt))))
 }
 

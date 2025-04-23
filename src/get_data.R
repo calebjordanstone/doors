@@ -53,14 +53,14 @@ get_data <- function(data_path, sub, ses, train_type, train_doors) {
         "task-mforage_beh.tsv",
         sep = "_"
       )), header = TRUE)
-      resps_3 <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-9",
-        "task-mforage_beh.tsv",
-        sep = "_"
-      )), header = TRUE)
+      # resps_3 <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-9",
+      #   "task-mforage_beh.tsv",
+      #   sep = "_"
+      # )), header = TRUE)
     }
 
     ### trim the data remove practice trials and reset trial numbers
-    if (ses == "ses-learn") {
+    if (ses == "ses-learn") { 
       trials <- trials %>%
         filter(t != 999)
       if (version == "pilot-data-00" || version == "pilot-data-01") {
@@ -72,41 +72,52 @@ get_data <- function(data_path, sub, ses, train_type, train_doors) {
           filter(cond != 3) # remove practice trials from house-1
         resps_1$t <- resps_1$t - 5 # adjust the trial counter for house-1, now that practice trials are gone
         resps_2$t <- resps_2$t + resps_1$t[nrow(resps_1)]
-        resps_3$t <- resps_3$t + resps_2$t[nrow(resps_2)]
+        # resps_3$t <- resps_3$t + resps_2$t[nrow(resps_2)]
 
-        resps <- rbind(resps_1, resps_2, resps_3)
+        resps <- rbind(resps_1, resps_2) #, resps_3)
         #resps$learn_phase <- c(rep(0,nrow(resps_1)),rep(0,nrow(resps_2)),rep(1,nrow(resps_3)))
       }
     }
-    resps <- resps %>%
-      filter(door > 0) # we only care about samples in which people hovered or clicked on a door
+    
     resps <- resps %>%
       rename(context = cond) %>%
-      mutate(door_cc = case_when(door_p > 0 ~ 1, door_p == 0 ~ 0, .default = 0))
-    # if (ses == "ses-learn") {
-    #   resps <- resps %>%
-    #     rename(ses = learn)
-    # } else if (ses == "ses-train") {
-    #   resps <- resps %>%
-    #     rename(ses = train)
-    # } else {
-    #   resps <- resps %>%
-    #     rename(ses = test)
-    # }
-
+      mutate(door_cc = case_when(door_p > 0 ~ 1, door_p == 0 ~ 0, .default = 0)) # door_cc = current context
+    if (ses == "ses-learn") {
+      resps <- resps %>%
+        rename(ses = learn)
+    } else if (ses == "ses-train") {
+      resps <- resps %>%
+        rename(ses = train)
+    } else {
+      resps <- resps %>%
+        rename(ses = test)
+    }
+    
+    # find onset time of each trial
+    ons <- resps %>% 
+      group_by(sub, ses, t, context) %>% 
+      summarise(on = min(onset))
+    
+    resps <- resps %>%
+      filter(door > 0) # we only care about samples in which people hovered or clicked on a door
+    
     ### find the important events
     resps <- resps %>%
-      mutate(on = c(onset[[1]], case_when(diff(open_d) != 0 ~ onset[2:length(onset)], diff(door) !=
-        0 ~ onset[2:length(onset)], .default = NA))) %>%
-      mutate(off = c(case_when(diff(open_d) != 0 ~ onset[1:length(onset) - 1], diff(door) != 0 ~
-        onset[1:length(onset) - 1], .default = NA), onset[[length(onset)]])) %>%
+      mutate(on = c(onset[[1]], 
+                    case_when(diff(open_d) != 0 ~ onset[2:length(onset)], 
+                              diff(door) != 0 ~ onset[2:length(onset)], 
+                              .default = NA))) %>%
+      mutate(off = c(case_when(diff(open_d) != 0 ~ onset[1:length(onset) - 1], 
+                               diff(door) != 0 ~ onset[1:length(onset) - 1], 
+                               .default = NA), 
+                     onset[[length(onset)]])) %>%
       filter(!is.na(on) | !is.na(off)) %>%
       mutate(off = c(off[2:length(off)], NA)) %>%
       filter(!is.na(on)) %>%
       mutate(off = case_when(!is.na(off) ~ off, is.na(off) ~ c(on[2:length(on)], NA), .default = NA)) # if two onsets occured back-to-back, use the second onset as the first offset
     trials <- unique(resps$t)
     resps <- resps %>%
-      mutate(subses = case_when(t %in% trials[1:round(length(trials) / 2)] ~ 1, .default = 2), .after=str_split_i(ses, '-', 2))
+      mutate(subses = case_when(t %in% trials[1:round(length(trials) / 2)] ~ 1, .default = 2), .after=str_split_i(ses, '-', 1)) # 2
 
     ### code door by whether it's part of current context, other context, or no context
     doors <- resps %>%
@@ -184,7 +195,7 @@ get_data <- function(data_path, sub, ses, train_type, train_doors) {
           original_house = c(kronecker(matrix(1, nrow(resps), 1), NA)))
     }
 
-    return(resps)
+    return(list(resps=resps, ons=ons))
   } else {
     stop(paste("check data for", file.path(data_path, exp, sub, ses)))
   }
