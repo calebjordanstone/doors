@@ -17,9 +17,13 @@ source(file.path("src","get_learned_doors.R"))
 
 # !you will want to update these settings a lot during piloting, when the task code or the way you
 # test changes, or when you test participants on different subsets of the task phases
-version <- "pilot-data" # # pilot-data-00 (train and test), pilot-data-01 (learn and train), pilot-data-02 (learn and train, learn phase split into two parts), pilot-data-03 (lean, train, test, 2025)
-exp <- "flexibility" # or "multitasking
-sess <- c("ses-learn","ses-train","ses-test") # session: 'ses-learn','ses-train','ses-test'. can select one (e.g. ses <- c('ses-learn')) or multiple (e.g. ses <- c('ses-train','ses-test'))
+version <- "pilot-data" 
+exp <- "multitasking" #"flexibility" 
+if (exp == "multitasking") {
+  sess <- c('ses-mts', "ses-learn","ses-train","ses-test")
+} else {
+  sess <- c("ses-learn","ses-train","ses-test")
+}
 
 ### paths
 
@@ -51,10 +55,9 @@ subs <- unique(str_split_i(files, "/", 1))
 grp_data <- data.frame(
   sub = integer(), ses = integer(), subses = integer(), t = integer(), context = integer(), door = integer(),
   door_cc = integer(), door_oc = integer(), on = numeric(), off = numeric(), 
-  switch = integer(), train_type = integer(), transfer = integer(), full_transfer_first = integer(),
-  original_house = integer()
-)
+  switch = integer(), train_type = integer())
 
+# create empty data frame for the response time data
 grp_ons <- data.frame(
   sub = integer(), ses = integer(), t = integer(), context = integer(), on = integer()
 )
@@ -84,30 +87,30 @@ for (sub in subs) {
       
       data <- get_data(data_path, sub, ses, train_type, train_doors) # load and format raw data
       grp_data <- rbind(grp_data, data$resps) # add to the 'grp_data' data frame so we end up with all subjects and sessions in one spreadsheet
-      grp_ons <- rbind(grp_ons, data$ons)
+      grp_ons <- rbind(grp_ons, data$ons) # add event onset times to data frame
     }
   }
 
 # track whether context-incorrect clicks in the test phase land on doors that were learned in the train phase
-if(exp=="exp_lt"){
-  door_lc <- get_learned_doors(grp_data)
-  grp_data <- grp_data %>% add_column(door_lc = door_lc, .after="door_oc")
-}else{
-  grp_data <- grp_data %>% mutate(door_lc = c(kronecker(matrix(1, nrow(grp_data), 1), NA)), .after="door_oc")
-}
-
+# if(exp=="exp_lt"){
+#   door_lc <- get_learned_doors(grp_data)
+#   grp_data <- grp_data %>% add_column(door_lc = door_lc, .after="door_oc")
+# }else{
+#   grp_data <- grp_data %>% mutate(door_lc = c(kronecker(matrix(1, nrow(grp_data), 1), NA)), .after="door_oc")
+# }
+grp_data <- grp_data %>% mutate(door_lc = c(kronecker(matrix(1, nrow(grp_data), 1), NA)), .after="door_oc")
 grp_data <- get_setting_stability(grp_data) # track when they changed context into the correct or other context's door set
 grp_data <- grp_data %>% mutate(door_nc = case_when(door_cc==1 ~ 0, door_oc == 1 ~ 0, .default=1), .after="door_oc")
 
 # save the formatted data
-fnl <- file.path(project_path, "res", paste(paste(sub, exp, "evt", sep = "_"), ".csv", sep = ""))
+fnl <- file.path(project_path, "res", paste(paste(exp, "evt", sep = "_"), ".csv", sep = ""))
 write_csv(grp_data, fnl)
 
 ### extract accuracy and response time averages from event data
 
 # by trial
 res <- grp_data %>%
-  group_by(sub, ses, subses, t, context, train_type, transfer, full_transfer_first, original_house) %>%
+  group_by(sub, ses, subses, t, context, train_type) %>%
   summarise(
     switch = max(switch), n_clicks = n(), n_cc = sum(door_cc), n_oc = sum(door_oc), n_lc = sum(door_lc), n_nc = sum(door_nc),
     setting_sticks = select_oc[1],
@@ -128,7 +131,7 @@ res <- grp_data %>%
 # calculate context change rates
 res$context_changes[intersect(which(res$switch==1),which(res$ses==2))] <- res$context_changes[intersect(which(res$switch==1),which(res$ses==2))]-1
 rt <- grp_data %>%
-  group_by(sub, ses, subses, t, context, train_type, transfer) %>%
+  group_by(sub, ses, subses, t, context, train_type) %>%
   filter(door_cc == 1) %>%
   summarise(rt = min(off)) # time to first correct click offset
 rt <- inner_join(grp_ons, rt, by=c('sub', 'ses', 't', 'context'))
@@ -140,7 +143,7 @@ res$first_click_correct <- grp_data %>%
   mutate(diff_cc = diff(c(1,door_cc))) %>% 
   mutate(diff_t = diff(c(0,t))) %>% 
   mutate(first_click_correct = case_when(diff_cc == 0 & diff_t == 1 ~ 1, .default = 0)) %>% 
-  group_by(sub, ses, subses, t, context, train_type, transfer, full_transfer_first, original_house) %>%
+  group_by(sub, ses, subses, t, context, train_type) %>%
   summarise(first_click_correct = first_click_correct[1]) %>% 
   pull(first_click_correct)
 res <- res %>% 
@@ -158,26 +161,26 @@ write_csv(res, fnl)
 #   grouping by subsession
 res_ss <- res %>%
   ungroup() %>% 
-  group_by(sub, ses, subses, context, switch, train_type, transfer, full_transfer_first, original_house) %>%
+  group_by(sub, ses, subses, context, switch, train_type) %>%
   summarise(across(everything(), \(x) mean(x, na.rm = TRUE) )) %>% 
   select(!first_click_correct)
 res_ss <- res_ss %>% ungroup() %>% mutate(transition_probabilities = c(kronecker(matrix(1, nrow(res_ss), 1), NA)))
-if(exp=="exp_lt"){
-  res_ss$transition_probabilities[which(res_ss$ses==2)] <- get_transition_probabilities(grp_data)
-}
+# if(exp=="exp_lt"){
+#   res_ss$transition_probabilities[which(res_ss$ses==2)] <- get_transition_probabilities(grp_data)
+# }
 res_ss <- res_ss %>% select(!t)
 fnl <- file.path(project_path, "res", paste(paste(exp, "avg-ss", sep = "_"), ".csv", sep = ""))
 write_csv(res_ss, fnl)
 
 #   just grouping by session
 res <- res %>%
-  group_by(sub, ses, context, switch, train_type, transfer, full_transfer_first, original_house) %>%
+  group_by(sub, ses, context, switch, train_type) %>%
   summarise(across(everything(), \(x) mean(x, na.rm = TRUE) )) %>% 
   select(!first_click_correct)
 res <- res %>% ungroup() %>% mutate(transition_probabilities = c(kronecker(matrix(1, nrow(res), 1), NA)))
-if(exp=="exp_lt"){
-  res$transition_probabilities[which(res$ses==2)] <- get_transition_probabilities(grp_data)
-}
+# if(exp=="exp_lt"){
+#   res$transition_probabilities[which(res$ses==2)] <- get_transition_probabilities(grp_data)
+# }
 res <- res %>% select(!subses)
 fnl <- file.path(project_path, "res", paste(paste(exp, "avg", sep = "_"), ".csv", sep = ""))
 write_csv(res, fnl)
