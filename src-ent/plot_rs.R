@@ -19,7 +19,7 @@ p_hgt <- 6
 ###########################################################
 # first plot two example participants, over 2 trials,
 # one with a low R and one with a high R score
-
+# see src-ent/plot_trajectories
 
 ###########################################################
 # load r data from each exp

@@ -1,27 +1,29 @@
+plot_trajectories <- function(data_fname, fig_save_fname, w){
 #########################################################
 # K. Garner 2025
 # plot participant trajectories (1 high routine 1 low routine)
+# Note: coded out lines were used prior to making this a function
 #########################################################
 ########################################################
 # get helpful things
 #######################################################
-rm(list=ls())
-library(tidyverse)
-library(gridExtra)
+# rm(list=ls())
+# library(tidyverse)
+# library(gridExtra)
 #source('fig_label.R') # maybe later
 
 #figinfo = 's'
-w <- 20 # in cm
-h <- 20 # in cm
+#w <- 12 # in cm
+#h <- 20 # in cm
 
-fstem <- '../doors-data/'
-exp_str <- 'lt'
+# fstem <- '../doors-data/'
+# exp_str <- 'lt'
 ########################################################
 # get load data
 #######################################################
 # now add 2 x 5 search routines on the bottom row
-all_dat <- read.csv(paste(fstem, 'data-wrangled/exp_', exp_str, '_evt.csv', sep=""))
-
+#all_dat <- read.csv(paste(fstem, 'data-wrangled/exp_', exp_str, '_evt.csv', sep=""))
+all_dat <- read.csv(data_fname)
 xs <- rep(c(1, 2, 3, 4), times = 4)
 ys <- rep(c(4, 3, 2, 1), each = 4)
 
@@ -104,5 +106,8 @@ tracs <- grid.arrange(all_ps[[1]], all_ps[[2]],
                       heights = rep(2.5, nsubs),
                       left = "sub",
                       top = "trials")
-ggsave(paste(fstem, "figs/trajectories2subs_4talk.pdf", sep=""), tracs, 
+
+ggsave(fig_save_fname, tracs, 
        width = w+.5, height = (w/6*2)+.5, units="cm")
+tracs
+}
