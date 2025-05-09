@@ -166,3 +166,35 @@ Lets do the pairs plot:
 ggpairs(all_dat %>% select(train_type, log_r, log_acc, log_k4),
         mapping=ggplot2::aes(colour = all_dat$train_type))
 ```
+
+Just going to print a scatter plot of the acc ratio / log r relationship for a talk
+
+```{r}
+
+p_wdth = 10
+p_hgt = 10
+
+pdf(paste('/home/kgarner/Documents/projects/doors-data/figs/scatter_talk.pdf', sep=""), # for talks
+          width = p_wdth/2.54*2.5, height = p_hgt/2.54*2.5)
+par(mar = c(5, 5, 2, 1), las=2, cex=2)
+with(all_dat, plot(x=log_r, y=log_acc, pch=19,
+     frame.plot=F, ylim=c(-0.2, .2),
+     xlim=c(0, 4),
+     xlab = "log r",
+     ylab = "learning",
+     col = wes_palette("IsleofDogs1")[1],
+     main = "",
+     xaxt = "n",
+     yaxt = "n",
+     cex = 2,
+     cex.lab = 2))
+axis(1, at = seq(0, 4, by = 2), cex.axis = 1.5)
+axis(2, at = seq(-0.2, 2, by = 0.1), cex.axis = 1.5)
+with(all_dat, points(x=log_r, y=log_acc, pch=1, cex=2))
+# draw regression line
+mod <- lm(log_acc ~ log_r, data=all_dat)
+abline(mod, col = "black", lwd = 1)
+text(x=1, y=-0.15, labels="r(81)=-0.28***", cex = 1.5)
+dev.off()
+
+```

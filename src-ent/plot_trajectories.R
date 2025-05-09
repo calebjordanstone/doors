@@ -1,27 +1,29 @@
+plot_trajectories <- function(data_fname, fig_save_fname, w){
 #########################################################
 # K. Garner 2025
 # plot participant trajectories (1 high routine 1 low routine)
+# Note: coded out lines were used prior to making this a function
 #########################################################
 ########################################################
 # get helpful things
 #######################################################
-rm(list=ls())
-library(tidyverse)
-library(gridExtra)
+# rm(list=ls())
+# library(tidyverse)
+# library(gridExtra)
 #source('fig_label.R') # maybe later
 
 #figinfo = 's'
-w <- 20 # in cm
-h <- 20 # in cm
+#w <- 12 # in cm
+#h <- 20 # in cm
 
-fstem <- '../doors-data/'
-exp_str <- 'lt'
+# fstem <- '../doors-data/'
+# exp_str <- 'lt'
 ########################################################
 # get load data
 #######################################################
 # now add 2 x 5 search routines on the bottom row
-all_dat <- read.csv(paste(fstem, 'data-wrangled/exp_', exp_str, '_evt.csv', sep=""))
-
+#all_dat <- read.csv(paste(fstem, 'data-wrangled/exp_', exp_str, '_evt.csv', sep=""))
+all_dat <- read.csv(data_fname)
 xs <- rep(c(1, 2, 3, 4), times = 4)
 ys <- rep(c(4, 3, 2, 1), each = 4)
 
@@ -61,6 +63,7 @@ draw_trajectory <- function(dat, cntxt, xs, ys, obs){
                aes(x = xs,
                    y = ys,
                    colour = tgt), size = 4, alpha = .3) +
+    scale_colour_manual(values=c("#fa9fb5", "#4dd0a9ff" ,"#a7a2e5ff")) + 
     theme(axis.title.x=element_blank(),
           axis.text.x=element_blank(),
           axis.ticks.x=element_blank()) +
@@ -76,12 +79,11 @@ draw_trajectory <- function(dat, cntxt, xs, ys, obs){
 #########
 # first filter the data for the second session and pick some subjects
 ############
-subs <- c(1, 10, 61, 64)
 ses_dat <- all_dat %>% filter(ses == 2)
 cntx = 1
 
 # change sub 1 arrows so that they are all going the right way
-sub1_idxs <- list(c(179:183), c(247:251), c(400:404), c(514:518), c(890:894))
+sub1_idxs <- list(c(175:179), c(247:251), c(398:402), c(511:515), c(889:893))
 sub1_ps <- lapply(sub1_idxs, draw_trajectory, 
                     dat = ses_dat %>% filter(sub == 1),
                     xs = xs, ys=ys, cntxt = cntx)
@@ -104,5 +106,8 @@ tracs <- grid.arrange(all_ps[[1]], all_ps[[2]],
                       heights = rep(2.5, nsubs),
                       left = "sub",
                       top = "trials")
-ggsave(paste(fstem, "figs/trajectories2subs_4talk.pdf", sep=""), tracs, 
+
+ggsave(fig_save_fname, tracs, 
        width = w+.5, height = (w/6*2)+.5, units="cm")
+tracs
+}
