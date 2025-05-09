@@ -2,138 +2,137 @@ get_data <- function(data_path, exp, sub, ses, train_type, train_doors) {
   # reads in trial info and sample data from 'trls' and 'beh' files and formats into a
   # one-row-per-trial data frame
 
-  # if (ses != "ses-learn") {
-  #   success <- c()
-  #   success <- rbind(success, file.exists(file.path(data_path, sub, ses, "beh", paste(sub, ses,
-  #     "task-mforage_trls.tsv",
-  #     sep = "_"
-  #   ))))
-  #   success <- rbind(success, file.exists(file.path(data_path, sub, ses, "beh", paste(sub, ses,
-  #     "task-mforage_beh.tsv",
-  #     sep = "_"
-  #   ))))
-  # } else {
-  #   haus <- c("house-1", "house-2")
-  #   success <- c()
-  #   for (h in haus) {
-  #     success <- rbind(success, file.exists(file.path(data_path, sub, ses, "beh", paste(sub,
-  #       ses, h, "task-mforage_trls.tsv",
-  #       sep = "_"
-  #     ))))
-  #     success <- rbind(success, file.exists(file.path(data_path, sub, ses, "beh", paste(sub,
-  #       ses, h, "task-mforage_beh.tsv",
-  #       sep = "_"
-  #     ))))
-  #   }
-  # }
-  # 
-  
   success <- c()
-  if (ses == "ses-learn") {
+  if (ses != "ses-learn") {
+    success <- rbind(success, file.exists(file.path(data_path, sub, ses, "beh", paste(sub, ses,
+      "task-mforage_trls.tsv",
+      sep = "_"
+    ))))
+    success <- rbind(success, file.exists(file.path(data_path, sub, ses, "beh", paste(sub, ses,
+      "task-mforage_beh.tsv",
+      sep = "_"
+    ))))
+  } else {
     haus <- c("house-1", "house-2")
     for (h in haus) {
-      success <- rbind(success, file.exists(file.path(
-        data_path, sub, ses, "beh", paste(sub,ses, h, "task-mforage_trls.tsv", sep = "_"
+      success <- rbind(success, file.exists(file.path(data_path, sub, ses, "beh", paste(sub,
+        ses, h, "task-mforage_trls.tsv",
+        sep = "_"
       ))))
-      success <- rbind(success, file.exists(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, h, "task-mforage_beh.tsv", sep = "_"
+      success <- rbind(success, file.exists(file.path(data_path, sub, ses, "beh", paste(sub,
+        ses, h, "task-mforage_beh.tsv",
+        sep = "_"
       ))))
-    }} else if (ses == 'ses-mts') {
-      success <- rbind(success, file.exists(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, "task-mts_beh.tsv", sep = "_"
-      ))))
-      success <- rbind(success, file.exists(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, "task-mts_trls.tsv", sep = "_"
-      ))))
-    } else if (ses == 'ses-test' & exp == 'multitasking') {
-    success <- rbind(success, file.exists(file.path(
-      data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_trls.tsv",sep = "_"
-      ))))
-    success <- rbind(success, file.exists(file.path(
-      data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_mt-trls.tsv", sep = "_"
-      ))))
-    success <- rbind(success, file.exists(file.path(
-      data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_beh.tsv", sep = "_"
-      ))))
-    success <- rbind(success, file.exists(file.path(
-      data_path, sub, ses, "beh", paste(sub, ses, "task-mts_trls.tsv", sep = "_"
-      ))))
-    success <- rbind(success, file.exists(file.path(
-      data_path, sub, ses, "beh", paste(sub, ses, "task-mts_beh.tsv", sep = "_"
-      ))))
-    } else {
-      success <- rbind(success, file.exists(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_trls.tsv",sep = "_"
-      ))))
-      success <- rbind(success, file.exists(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_beh.tsv", sep = "_"
-        ))))
     }
+  }
+
+  # 
+  # success <- c()
+  # if (ses == "ses-learn") {
+  #   haus <- c("house-1", "house-2")
+  #   for (h in haus) {
+  #     success <- rbind(success, file.exists(file.path(
+  #       data_path, sub, ses, "beh", paste(sub,ses, h, "task-mforage_trls.tsv", sep = "_"
+  #     ))))
+  #     success <- rbind(success, file.exists(file.path(
+  #       data_path, sub, ses, "beh", paste(sub, ses, h, "task-mforage_beh.tsv", sep = "_"
+  #     ))))
+  #   }} else if (ses == 'ses-mts') {
+  #     success <- rbind(success, file.exists(file.path(
+  #       data_path, sub, ses, "beh", paste(sub, ses, "task-mts_beh.tsv", sep = "_"
+  #     ))))
+  #     success <- rbind(success, file.exists(file.path(
+  #       data_path, sub, ses, "beh", paste(sub, ses, "task-mts_trls.tsv", sep = "_"
+  #     ))))
+  #   } else if (ses == 'ses-test' & exp == 'multitasking') {
+  #   success <- rbind(success, file.exists(file.path(
+  #     data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_trls.tsv",sep = "_"
+  #     ))))
+  #   success <- rbind(success, file.exists(file.path(
+  #     data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_mt-trls.tsv", sep = "_"
+  #     ))))
+  #   success <- rbind(success, file.exists(file.path(
+  #     data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_beh.tsv", sep = "_"
+  #     ))))
+  #   success <- rbind(success, file.exists(file.path(
+  #     data_path, sub, ses, "beh", paste(sub, ses, "task-mts_trls.tsv", sep = "_"
+  #     ))))
+  #   success <- rbind(success, file.exists(file.path(
+  #     data_path, sub, ses, "beh", paste(sub, ses, "task-mts_beh.tsv", sep = "_"
+  #     ))))
+  #   } else {
+  #     success <- rbind(success, file.exists(file.path(
+  #       data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_trls.tsv",sep = "_"
+  #     ))))
+  #     success <- rbind(success, file.exists(file.path(
+  #       data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_beh.tsv", sep = "_"
+  #       ))))
+  #   }
 
   
   if (all(success)) {
     
-    # if (ses != "ses-learn") {
-    #   trials <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_trls.tsv",
-    #     sep = "_"
+    if (ses != "ses-learn") {
+      trials <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_trls.tsv",
+        sep = "_"
+      )), header = TRUE)
+      resps <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_beh.tsv",
+        sep = "_"
+      )), header = TRUE)
+    }
+    else {
+      trials <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-1",
+        "task-mforage_trls.tsv",
+        sep = "_"
+      )), header = TRUE)
+      trials <- rbind(trials, read.table(file.path(data_path, sub, ses, "beh", paste(sub,
+        ses, "house-2", "task-mforage_trls.tsv",
+        sep = "_"
+      )), header = TRUE))
+
+      resps_1 <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-1",
+        "task-mforage_beh.tsv",
+        sep = "_"
+      )), header = TRUE)
+      resps_2 <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-2",
+        "task-mforage_beh.tsv",
+        sep = "_"
+      )), header = TRUE)
+      # resps_3 <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-9",
+      #   "task-mforage_beh.tsv",
+      #   sep = "_"
+      # )), header = TRUE)
+    }
+    
+    # if (ses == 'ses-learn') {
+    #   trials <- read.table(file.path(
+    #     data_path, sub, ses, "beh", paste(sub, ses, "house-1", "task-mforage_trls.tsv", sep = "_"
     #   )), header = TRUE)
-    #   resps <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_beh.tsv",
-    #     sep = "_"
+    #   trials <- rbind(trials, read.table(file.path(
+    #     data_path, sub, ses, "beh", paste(sub, ses, "house-2", "task-mforage_trls.tsv", sep = "_"
+    #   )), header = TRUE))
+    #   resps_1 <- read.table(file.path(
+    #     data_path, sub, ses, "beh", paste(sub, ses, "house-1", "task-mforage_beh.tsv", sep = "_"
+    #   )), header = TRUE)
+    #   resps_2 <- read.table(file.path(
+    #     data_path, sub, ses, "beh", paste(sub, ses, "house-2", "task-mforage_beh.tsv", sep = "_"
+    #   )), header = TRUE)
+    # } else if (ses == 'ses-mts') {
+    #   trials <- read.table(file.path(
+    #     data_path, sub, ses, "beh", paste(sub, ses, "task-mts_trls.tsv",  sep = "_"
+    #     )), header = TRUE)
+    #   resps <- read.table(file.path(
+    #     data_path, sub, ses, "beh", paste(sub, ses, "task-mts_beh.tsv", sep = "_"
+    #     )), header = TRUE)
+    # } else  { # else if (ses == 'ses-test' & exp == 'multitasking') {} ## add this bit
+    #   trials <- read.table(file.path(
+    #     data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_trls.tsv",  sep = "_"
+    #   )), header = TRUE)
+    #   resps <- read.table(file.path(
+    #     data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_beh.tsv", sep = "_"
     #   )), header = TRUE)
     # } 
-    # else {
-    #   trials <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-1",
-    #     "task-mforage_trls.tsv",
-    #     sep = "_"
-    #   )), header = TRUE)
-    #   trials <- rbind(trials, read.table(file.path(data_path, sub, ses, "beh", paste(sub,
-    #     ses, "house-2", "task-mforage_trls.tsv",
-    #     sep = "_"
-    #   )), header = TRUE))
     # 
-    #   resps_1 <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-1",
-    #     "task-mforage_beh.tsv",
-    #     sep = "_"
-    #   )), header = TRUE)
-    #   resps_2 <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-2",
-    #     "task-mforage_beh.tsv",
-    #     sep = "_"
-    #   )), header = TRUE)
-    #   # resps_3 <- read.table(file.path(data_path, sub, ses, "beh", paste(sub, ses, "house-9",
-    #   #   "task-mforage_beh.tsv",
-    #   #   sep = "_"
-    #   # )), header = TRUE)
-    # }
-    
-    if (ses == 'ses-learn') {
-      trials <- read.table(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, "house-1", "task-mforage_trls.tsv", sep = "_"
-      )), header = TRUE)
-      trials <- rbind(trials, read.table(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, "house-2", "task-mforage_trls.tsv", sep = "_"
-      )), header = TRUE))
-      resps_1 <- read.table(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, "house-1", "task-mforage_beh.tsv", sep = "_"
-      )), header = TRUE)
-      resps_2 <- read.table(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, "house-2", "task-mforage_beh.tsv", sep = "_"
-      )), header = TRUE)
-    } else if (ses == 'ses-mts') {
-      trials <- read.table(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, "task-mts_trls.tsv",  sep = "_"
-        )), header = TRUE)
-      resps <- read.table(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, "task-mts_beh.tsv", sep = "_"
-        )), header = TRUE)
-    } else  { # else if (ses == 'ses-test' & exp == 'multitasking') {} ## add this bit
-      trials <- read.table(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_trls.tsv",  sep = "_"
-      )), header = TRUE)
-      resps <- read.table(file.path(
-        data_path, sub, ses, "beh", paste(sub, ses, "task-mforage_beh.tsv", sep = "_"
-      )), header = TRUE)
-    } 
-    
     
     ### trim the data remove practice trials and reset trial numbers
     if (ses == "ses-learn") { 

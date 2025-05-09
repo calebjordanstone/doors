@@ -8,20 +8,16 @@ version <- "pilot-data"
 exp <- "flexibility" # or "multitasking
 
 # paths
-project_path <- getwd()
-if (!dir.exists(file.path(project_path, "res"))) {
-  # check that the results directory exists. if it doesn't, create it.
-  dir.create(file.path(project_path, "res"))
-}
-file_path <- "C:/Users/cstone/OneDrive - UNSW/Documents/Projects/honours_projects/data"
+# project_path <- getwd()
+data_path <- "C:/Users/cstone/OneDrive - UNSW/Documents/Projects/honours_projects/data"
 exp_path <- str_glue("/{exp}/{version}")
-data_path <- file.path(file_path + exp_path)
+file_path <- file.path(data_path + exp_path)
 if (!dir.exists(data_path)) {
   stop(paste0(data_path, " does not exist"))
 }
 
 # load data
-data <- read.csv(paste0(data_path, '/FFMQ.csv'))
+data <- read.csv(paste0(file_path, '/FFMQ.csv'))
 data %<>% rename(SUBID = SUBID_1)
 
 # subset data

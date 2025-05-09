@@ -18,12 +18,14 @@ source(file.path("src","get_learned_doors.R"))
 # !you will want to update these settings a lot during piloting, when the task code or the way you
 # test changes, or when you test participants on different subsets of the task phases
 version <- "pilot-data" 
-exp <- "multitasking" #"flexibility" 
-if (exp == "multitasking") {
-  sess <- c('ses-mts', "ses-learn","ses-train","ses-test")
-} else {
-  sess <- c("ses-learn","ses-train","ses-test")
-}
+exp <- "multitasking" #"flexibility"
+sess <- c("ses-learn","ses-train","ses-test")
+
+# if (exp == "multitasking") {
+#   sess <- c('ses-mts', "ses-learn","ses-train","ses-test")
+# } else {
+#   sess <- c("ses-learn","ses-train","ses-test")
+# }
 
 ### paths
 
@@ -85,7 +87,7 @@ for (sub in subs) {
         unique()
     }
       
-      data <- get_data(data_path, sub, ses, train_type, train_doors) # load and format raw data
+      data <- get_data(data_path, exp, sub, ses, train_type, train_doors) # load and format raw data
       grp_data <- rbind(grp_data, data$resps) # add to the 'grp_data' data frame so we end up with all subjects and sessions in one spreadsheet
       grp_ons <- rbind(grp_ons, data$ons) # add event onset times to data frame
     }
